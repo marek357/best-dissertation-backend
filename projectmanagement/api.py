@@ -7,7 +7,8 @@ from ninja import File, Router, UploadedFile
 from django.forms.models import model_to_dict
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from projectmanagement.models import Category, Project, ProjectEntry, TextClassificationProject, UnannotatedProjectEntry
+from annotators.models import PublicAnnotator
+from projectmanagement.models import Category, MachineTranslationProject, Project, ProjectEntry, TextClassificationProject, UnannotatedProjectEntry
 
 from projectmanagement.schemas import EntrySchema, ProjectEntryPatchSchema, ProjectPatchSchema, ProjectSchema, TextClassificationOutSchema as TCOutSchema, MachineTranslationOutSchema as MTOutSchema
 
@@ -21,7 +22,7 @@ def create_project(request, project_type: str, name: str, description: str, talk
             name=name, description=description, talk_markdown=talk_markdown
         )
     elif project_type in ['machinetranslation', 'machine-translation', 'MachineTranslation', 'mt', 'MT']:
-        project = TextClassificationProject.objects.create(
+        project = MachineTranslationProject.objects.create(
             name=name, description=description, talk_markdown=talk_markdown
         )
     else:
@@ -58,7 +59,7 @@ def list_projects(request, project_type: Optional[str] = None):
 
 
 @router.delete('/projects/{project_url}', response={200: dict, 401: dict, 404: dict}, tags=['Project Management'])
-def delete_dataset(request, project_url: str):
+def delete_project(request, project_url: str):
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
@@ -129,16 +130,24 @@ def create_entry(request, project_url: str, entry: EntrySchema):
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
         return 404, {'detail', f'Project with url {project_url} does not exist'}
-    project.add_entry(request.user, entry)
+    try:
+        annotator = PublicAnnotator.objects.get(
+            contributor=request.user
+        )
+    except PublicAnnotator.DoesNotExist:
+        annotator = PublicAnnotator.objects.create(
+            contributor=request.user
+        )
+    return project.add_entry(annotator, entry)
 
 
-@router.get('/projects/{project_url}/entries', response={200: dict, 401: dict, 404: dict}, tags=['Project Entries'])
+@router.get('/projects/{project_url}/entries', response={200: list, 401: dict, 404: dict}, tags=['Project Entries'])
 def get_project_entries(request, project_url: str):
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
         return 404, {'detail', f'Project with url {project_url} does not exist'}
-    return [{
+    return 200, [{
         **model_to_dict(entry),
         **entry.values,
         'project': entry.project.name,
@@ -215,7 +224,7 @@ def get_project_statistics(request, project_url: str):
     return {
         'total_entries': project.entries.count(),
         'total_imported_texts': project.imported_texts.count(),
-        **project.get_statistsics()
+        **project.get_statistics()
     }
 
 
@@ -247,10 +256,15 @@ def import_unannotated(request, project_url: str, text_field: str, csv_delimiter
     if type(unannotated_data) != list:
         return 400, {'detail': f'Uploaded data is not in a list of records format'}
 
-    return project.add_unannotated_entries(unannotated_data, text_field, value_field, context_field)
+    return project.add_unannotated_entries(
+        unannotated_data=unannotated_data,
+        text_field=text_field,
+        value_field=value_field,
+        context_field=context_field
+    )
 
 
-@router.get('/projects/{project_url}/import', response={200: dict, 401: dict, 404: dict}, tags=['Unannotated Entries'])
+@router.get('/projects/{project_url}/import', response={200: list, 401: dict, 404: dict}, tags=['Unannotated Entries'])
 def get_imported_entries(request, project_url: str):
     try:
         project = Project.objects.get(url=project_url)
@@ -259,6 +273,8 @@ def get_imported_entries(request, project_url: str):
 
     return [{
         **model_to_dict(entry),
+        'project': project.name,
+        'project_url': str(project.url),
         'pre_annotations': entry.pre_annotations,
         'created_at': entry.created_at.isoformat(),
         'updated_at': entry.updated_at.isoformat(),
@@ -267,7 +283,7 @@ def get_imported_entries(request, project_url: str):
 
 
 @router.delete('/projects/{project_url}/import/{entry_id}', response={200: dict, 401: dict, 404: dict}, tags=['Unannotated Entries'])
-def delete_project_entry(request, project_url: str, entry_id: int):
+def delete_unannotated_project_entry(request, project_url: str, entry_id: int):
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
@@ -283,7 +299,7 @@ def delete_project_entry(request, project_url: str, entry_id: int):
 
 
 @router.get('/projects/{project_url}/export', tags=['Project Management'])
-def export_dataset(request, project_url: str, export_type: str):
+def export_project(request, project_url: str, export_type: str):
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):

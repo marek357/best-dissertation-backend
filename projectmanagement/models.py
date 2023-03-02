@@ -61,9 +61,9 @@ class Project(PolymorphicModel):
         raise NotImplementedError
 
     def add_unannotated_entries(self, **kwargs):
-        # All datasets have different structure of preannotations
-        #   and therefore, arguments cannot be described other than
-        #   the generic **kwargs
+        # All types of projects have different structure of
+        #   preannotations and therefore, arguments cannot
+        #   be described other than the generic **kwargs
         raise NotImplementedError
 
     def get_annotators_annotations(self, annotator):
@@ -145,7 +145,7 @@ class TextClassificationProjectEntry(ProjectEntry):
         self.classification = classification
         self.updated_at = datetime.now()
         self.save()
-        return self
+        return 200, model_to_dict(self)
 
 
 class MachineTranslationProjectEntry(ProjectEntry):
@@ -166,7 +166,7 @@ class MachineTranslationProjectEntry(ProjectEntry):
             self.adequacy = update_data.adequacy
         self.updated_at = datetime.now()
         self.save()
-        return self
+        return 200, model_to_dict(self)
 
 
 class TextClassificationProject(Project):
@@ -193,7 +193,7 @@ class TextClassificationProject(Project):
     def get_imported_entry(self, entry_id):
         return TextClassificationProjectUnannotatedEntry.objects.get(id=entry_id, project=self)
 
-    def add_entry(self, contributor, entry_data):
+    def add_entry(self, annotator, entry_data):
         try:
             category = Category.objects.get(
                 project=self, name=entry_data.payload['category-name'])
@@ -212,17 +212,6 @@ class TextClassificationProject(Project):
                     does not exist in project {self.name}
                 '''
             }
-        try:
-            annotator = PrivateAnnotator.objects.get(contributor=contributor)
-        except PrivateAnnotator.DoesNotExist:
-            try:
-                annotator = PublicAnnotator.objects.get(
-                    contributor=contributor
-                )
-            except PublicAnnotator.DoesNotExist:
-                annotator = PublicAnnotator.objects.create(
-                    contributor=contributor
-                )
         new_entry = TextClassificationProjectEntry.objects.create(
             project=self, classification=category,
             unannotated_source=unannotated_source,
@@ -232,7 +221,7 @@ class TextClassificationProject(Project):
             **model_to_dict(new_entry),
             'project': self.name,
             'project_url': self.url,
-            'annotator': contributor.username,
+            'annotator': annotator.contributor.username,
             'classification': category.name
         }
 
@@ -292,7 +281,7 @@ class TextClassificationProject(Project):
 
 class MachineTranslationProject(Project):
     @property
-    def total_imported_texts(self):
+    def imported_texts(self):
         return MachineTranslationProjectUnannotatedEntry.objects.filter(project=self)
 
     @property
@@ -310,8 +299,8 @@ class MachineTranslationProject(Project):
     def get_imported_entry(self, entry_id):
         return MachineTranslationProjectUnannotatedEntry.objects.get(id=entry_id, project=self)
 
-    def add_entry(self, contributor, entry_data):
-        if None in [entry_data.adequacy, entry_data.fluency]:
+    def add_entry(self, annotator, entry_data):
+        if None in [entry_data.payload.get('adequacy', None), entry_data.payload.get('fluency', None)]:
             return 400, {'details': 'Missing data in request'}
         try:
             unannotated_source = UnannotatedProjectEntry.objects.get(
@@ -324,20 +313,9 @@ class MachineTranslationProject(Project):
                     does not exist in project {self.name}
                 '''
             }
-        try:
-            annotator = PrivateAnnotator.objects.get(contributor=contributor)
-        except PrivateAnnotator.DoesNotExist:
-            try:
-                annotator = PublicAnnotator.objects.get(
-                    contributor=contributor
-                )
-            except PublicAnnotator.DoesNotExist:
-                annotator = PublicAnnotator.objects.create(
-                    contributor=contributor
-                )
         new_entry = MachineTranslationProjectEntry.objects.create(
-            project=self, adequacy=entry_data.adequacy,
-            fluency=entry_data.fluency,
+            project=self, adequacy=entry_data.payload.get('adequacy', None),
+            fluency=entry_data.payload.get('fluency', None),
             unannotated_source=unannotated_source,
             annotator=annotator
         )
@@ -345,12 +323,12 @@ class MachineTranslationProject(Project):
             **model_to_dict(new_entry),
             'project': self.name,
             'project_url': self.url,
-            'annotator': contributor.username,
+            'annotator': annotator.contributor.username,
             'fluency': new_entry.fluency,
             'adequacy': new_entry.adequacy
         }
 
-    def add_unannotated_entries(self, unannotated_data, text_field, context_field):
+    def add_unannotated_entries(self, unannotated_data, text_field, context_field, **kwargs):
         # start by running data integrity checks
         # on the uploaded data to ensure that
         # data is well formated

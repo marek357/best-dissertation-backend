@@ -35,5 +35,5 @@ class ProjectEntryPatchSchema(ProjectSchema):
 
 
 class EntrySchema(Schema):
-    unannotated_source: str
+    unannotated_source: int
     payload: dict

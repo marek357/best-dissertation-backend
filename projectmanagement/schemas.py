@@ -2,6 +2,13 @@ from ninja import Schema
 from typing import List, Optional
 
 
+class CreateProjectSchema(Schema):
+    project_type: str
+    name: str
+    description: str
+    talk_markdown: str
+
+
 class ProjectSchema(Schema):
     id: int
     name: str
@@ -9,7 +16,7 @@ class ProjectSchema(Schema):
     administrators: List[str]
     created_at: str
     updated_at: str
-    project_type: str
+    type: str
     talk_markdown: str
     url: str
 

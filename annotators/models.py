@@ -42,7 +42,7 @@ class PrivateAnnotator(Annotator):
 
     @property
     def completion(self):
-        completed_annotations = self.project.get_annotators.annotations(self)
+        completed_annotations = self.project.get_annotators_annotations(self)
         annotations_total = self.project.imported_texts.count()
         if annotations_total == 0:
             return 100.0

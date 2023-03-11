@@ -10,27 +10,27 @@ from django.core.exceptions import ValidationError
 from annotators.models import PublicAnnotator
 from projectmanagement.models import Category, MachineTranslationProject, Project, ProjectEntry, TextClassificationProject, UnannotatedProjectEntry
 
-from projectmanagement.schemas import EntrySchema, ProjectEntryPatchSchema, ProjectPatchSchema, ProjectSchema, TextClassificationOutSchema as TCOutSchema, MachineTranslationOutSchema as MTOutSchema
+from projectmanagement.schemas import CreateProjectSchema, EntrySchema, ProjectEntryPatchSchema, ProjectPatchSchema, ProjectSchema, TextClassificationOutSchema as TCOutSchema, MachineTranslationOutSchema as MTOutSchema
 
 router = Router()
 
 
-@router.post('/create/', response={200: ProjectSchema, 404: dict}, tags=['Project Management'])
-def create_project(request, project_type: str, name: str, description: str, talk_markdown: str):
-    if project_type in ['textclassification', 'text-classification', 'TextClassification', 'tc', 'TC']:
+@router.post('/create/', response={200: dict, 404: dict}, tags=['Project Management'])
+def create_project(request, project_data: CreateProjectSchema):
+    if project_data.project_type in ['Text Classification', 'textclassification', 'text-classification', 'TextClassification', 'tc', 'TC']:
         project = TextClassificationProject.objects.create(
-            name=name, description=description, talk_markdown=talk_markdown
+            name=project_data.name, description=project_data.description, talk_markdown=project_data.talk_markdown
         )
-    elif project_type in ['machinetranslation', 'machine-translation', 'MachineTranslation', 'mt', 'MT']:
+    elif project_data.project_type in ['Machine Translation', 'machinetranslation', 'machine-translation', 'MachineTranslation', 'mt', 'MT']:
         project = MachineTranslationProject.objects.create(
-            name=name, description=description, talk_markdown=talk_markdown
+            name=project_data.name, description=project_data.description, talk_markdown=project_data.talk_markdown
         )
     else:
-        return 404, {'detail', f'Project type {project_type} is not supported'}
+        return 404, {'detail', f'Project type {project_data.project_type} is not supported'}
     project.administrators.add(request.user)
     return {
         **model_to_dict(project),
-        'project_type': project.project_type,
+        'type': project.project_type,
         'url': str(project.url),
         'created_at': project.created_at.isoformat(),
         'updated_at': project.updated_at.isoformat(),
@@ -48,7 +48,7 @@ def list_projects(request, project_type: Optional[str] = None):
     return sorted([
         {
             **model_to_dict(project),
-            'project_type': project.project_type,
+            'type': project.project_type,
             'url': str(project.url),
             'created_at': project.created_at.isoformat(),
             'updated_at': project.updated_at.isoformat(),
@@ -78,7 +78,7 @@ def get_project(request, project_url: str):
         return 404, {'detail', f'Project with url {project_url} does not exist'}
     return_dict = {
         **model_to_dict(project),
-        'project_type': project.project_type,
+        'type': project.project_type,
         'url': str(project.url),
         'created_at': project.created_at.isoformat(),
         'updated_at': project.updated_at.isoformat(),
@@ -207,7 +207,7 @@ def update_project(request, project_url: str, entry_id: int, update_data: Projec
     project.save()
     return {
         **model_to_dict(project),
-        'project_type': project.project_type,
+        'type': project.project_type,
         'url': str(project.url),
         'created_at': project.created_at.isoformat(),
         'updated_at': project.updated_at.isoformat(),

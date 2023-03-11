@@ -2,11 +2,13 @@ from django.http import HttpRequest
 from annotators.models import PrivateAnnotator
 from ninja.security import HttpBearer, APIKeyQuery
 from django.contrib.auth import get_user_model
+from firebase_admin import auth
 
 
 class PublicAnnotatorAdminAndContributorAuth(HttpBearer):
     def authenticate(self, request: HttpRequest, token: str):
         try:
+            print(f'trying to decode token: {token}')
             decoded_token = auth.verify_id_token(token)
             user_id = decoded_token['uid']
         except Exception:
@@ -18,7 +20,7 @@ class PublicAnnotatorAdminAndContributorAuth(HttpBearer):
                 username=user_id, email=decoded_token['email']
             )
             contributor.set_unusable_password()
-            request.user = contributor
+        request.user = contributor
         return True
 
 
@@ -38,6 +40,7 @@ class PrivateAnnotatorAuth(APIKeyQuery):
 
 def fallback_auth(request: HttpRequest):
     try:
+        print('fallback')
         # https://stackoverflow.com/questions/4581789/how-do-i-get-user-ip-address-in-django
         contributor = get_user_model().objects.get(
             username=request.META.get('REMOTE_ADDR')

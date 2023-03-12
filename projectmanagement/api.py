@@ -149,7 +149,7 @@ def get_project_entries(request, project_url: str):
         return 404, {'detail', f'Project with url {project_url} does not exist'}
     return 200, [{
         **model_to_dict(entry),
-        **entry.values,
+        'value': entry.values,
         'project': entry.project.name,
         'project_url': str(entry.project.url),
         'created_at': entry.created_at.isoformat(),
@@ -230,7 +230,7 @@ def get_project_statistics(request, project_url: str):
 
 @router.post('/projects/{project_url}/import', response={200: dict, 401: dict, 404: dict}, tags=['Unannotated Entries'])
 def import_unannotated(request, project_url: str, text_field: str, csv_delimiter: Optional[str] = None,
-                       value_field: Optional[str] = None, context_field: Optional[str] = None,
+                       value_field: Optional[str] = None, context_field: Optional[str] = None, mt_system_translation: Optional[str] = None,
                        unannotated_data_file: UploadedFile = File(...)):
     try:
         project = Project.objects.get(url=project_url)
@@ -256,6 +256,12 @@ def import_unannotated(request, project_url: str, text_field: str, csv_delimiter
     if type(unannotated_data) != list:
         return 400, {'detail': f'Uploaded data is not in a list of records format'}
 
+    if project.project_type == 'Machine Translation':
+        text_field = {
+            'reference_field': text_field,
+            'mt_system_translation': mt_system_translation
+        }
+
     return project.add_unannotated_entries(
         unannotated_data=unannotated_data,
         text_field=text_field,
@@ -270,8 +276,7 @@ def get_imported_entries(request, project_url: str):
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
         return 404, {'detail', f'Project with url {project_url} does not exist'}
-
-    return [{
+    return 200, [{
         **model_to_dict(entry),
         'project': project.name,
         'project_url': str(project.url),
@@ -308,7 +313,8 @@ def export_project(request, project_url: str, export_type: str):
     if export_type == 'csv':
         # https://docs.djangoproject.com/en/4.1/howto/outputting-csv/
         value_fields = sorted(project.value_fields)
-        response = HttpResponse(content_type='text/csv', headers={
+        # https://stackoverflow.com/questions/1156246/having-django-serve-downloadable-files
+        response = HttpResponse(content_type='application/force-download', headers={
             'Content-Disposition': f'attachment; filename="{project.name}.csv"'
         })
         writer = csv.writer(response)
@@ -328,7 +334,8 @@ def export_project(request, project_url: str, export_type: str):
                 entry.created_at.isoformat(), entry.updated_at.isoformat()
             ])
     elif export_type == 'json':
-        response = HttpResponse(content_type='application/json', headers={
+        # https://stackoverflow.com/questions/1156246/having-django-serve-downloadable-files
+        response = HttpResponse(content_type="application/force-download", headers={
             'Content-Disposition': f'attachment; filename="{project.name}.json"'
         })
         export_data = []
@@ -345,4 +352,4 @@ def export_project(request, project_url: str, export_type: str):
         response.write(json.dumps(export_data))
     else:
         return 400, {'detail': f'Requested export type {export_type} is not supported'}
-    return 200, response
+    return response

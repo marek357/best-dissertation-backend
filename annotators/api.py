@@ -65,8 +65,35 @@ def get_project_private_annotators(request, project_url: str):
     } for annotator in project.private_annotators]
 
 
+@router.get('/projects/annotator', response={200: dict, 401: dict, 404: dict}, tags=['Private Annotators'])
+def get_project_private_annotator(request, private_annotator_token: str):
+    try:
+        private_annotator = PrivateAnnotator.objects.get(
+            token=private_annotator_token
+        )
+    except PrivateAnnotator.DoesNotExist:
+        return 404, {
+            'detail': f'''
+                Private Annotator with token {private_annotator_token} does not exist.\n
+                Please contact your project administrator to ensure they provided you with the right token.\n
+                Please also ensure that the link you recieved in an email matches the current browser URL\n\n
+                See you soon!\n
+                Annopedia Team
+            '''
+        }
+    return 200, {
+        **model_to_dict(private_annotator),
+        'project_type': private_annotator.project.project_type,
+        'email': private_annotator.contributor.email,
+        'inviting_contributor': request.user.username,
+        'contributor': private_annotator.contributor.username,
+        'is_active': private_annotator.contributor.is_active,
+        'completion': private_annotator.completion
+    }
+
+
 @router.get('/projects/{project_url}/resend-invite-email', response={200: dict, 401: dict, 404: dict}, tags=['Private Annotators'])
-def resend_private_annotator_invitation(request, project_url: str, token: str):
+def resend_private_annotator_invitation(request, project_url: str, private_annotator_token: str):
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
@@ -74,25 +101,26 @@ def resend_private_annotator_invitation(request, project_url: str, token: str):
     if not project.contributor_is_admin(request.user):
         return 401, {'detail': f'Contributor is not project adminstrator'}
     try:
-        private_annotator = PrivateAnnotator.objects.get(token=token)
+        private_annotator = PrivateAnnotator.objects.get(
+            token=private_annotator_token)
     except PrivateAnnotator.DoesNotExist:
         return 404, {
             'detail': f'''
-                Contributor with token {token}
+                Contributor with token {private_annotator_token}
                 does not belong to the project {project.name}
             '''
         }
     if not project.private_annotators.filter(contributor=private_annotator.contributor).exists():
         return 404, {
             'detail': f'''
-                Contributor with token {token}
+                Contributor with token {private_annotator_token}
                 does not belong to the project {project.name}
             '''
         }
     if project.private_annotators.filter(contributor=private_annotator.contributor).count() != 1:
         return 404, {'detail': 'Data integrity error'}
     send_annotator_welcome_email(private_annotator, request.user, project)
-    return 200, {'detail': f'Successfully sent email again to private annotator at email {private_annotator.email}'}
+    return 200, {'detail': f'Successfully sent email again to private annotator at email {private_annotator.contributor.email}'}
 
 
 @router.get('/projects/{project_url}/{annotator_token}/toggle-annotator-status', response={200: dict, 401: dict, 404: dict}, tags=['Private Annotators'])
@@ -120,35 +148,25 @@ def toggle_annotator_status(request, project_url: str, annotator_token: str, ann
     }
 
 
-@router.post('/projects/{project_url}/entry', response={200: dict, 401: dict, 404: dict}, tags=['Private Annotators'])
-def create_private_annotators_entry(request, project_url: str, token: str, entry_data: PrivateAnnotatorEntryCreateSchema):
+@router.post('/projects/entry', response={200: dict, 401: dict, 404: dict}, tags=['Private Annotators'])
+def create_private_annotators_entry(request, token: str, entry_data: PrivateAnnotatorEntryCreateSchema):
     try:
-        project = Project.objects.get(url=project_url)
-    except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
-    if not project.contributor_is_admin(request.user):
-        return 401, {'detail': f'Contributor is not project adminstrator'}
-    try:
-        annotator = PrivateAnnotator.objects.filter(
-            project=project, token=token
-        )
+        annotator = PrivateAnnotator.objects.get(token=token)
     except PrivateAnnotator.DoesNotExist:
-        return 404, {'detail', f'Annotator with token {token} not found in project {project.name}'}
-    project.add_entry(annotator, entry_data)
+        return 404, {'detail', f'Annotator with token {token} not found'}
+    project = annotator.project
+    return project.add_entry(annotator, entry_data)
 
 
-@router.get('/projects/{project_url}/remaining', response={200: dict, 401: dict, 404: dict}, tags=['Private Annotators'])
-def get_remaining_entries_for_annotation_private_annotator(request, project_url: str, token: str):
+@router.get('/projects/remaining', response={200: list, 401: dict, 404: dict}, tags=['Private Annotators'])
+def get_remaining_entries_for_annotation_private_annotator(request, token: str):
     try:
-        project = Project.objects.get(url=project_url)
-    except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
-    try:
-        annotator = PrivateAnnotator.objects.get(project=project, token=token)
+        annotator = PrivateAnnotator.objects.get(token=token)
     except (PrivateAnnotator.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Annotator with token {token} does not exist in project {project.name}'}
+        return 404, {'detail', f'Annotator with token {token} does not exist'}
+    project = annotator.project
     # https://stackoverflow.com/questions/2354284/django-queries-how-to-filter-objects-to-exclude-id-which-is-in-a-list
-    annotated = project.get_annotators_annotations(annotator).value('id')
+    annotated = project.get_annotators_annotations(annotator).values('id')
     remaining_to_be_annotated = project.imported_texts.exclude(
         id__in=annotated
     )
@@ -163,24 +181,21 @@ def get_remaining_entries_for_annotation_private_annotator(request, project_url:
     } for entry in remaining_to_be_annotated]
 
 
-@router.get('/projects/{project_url}/remaining', response={200: dict, 401: dict, 404: dict}, tags=['Private Annotators'])
-def get_entries__private_annotator(request, project_url: str, token: str):
+@router.get('/projects/annotated', response={200: list, 401: dict, 404: dict}, tags=['Private Annotators'])
+def get_entries__private_annotator(request, token: str):
     try:
-        project = Project.objects.get(url=project_url)
-    except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
-    try:
-        annotator = PrivateAnnotator.objects.get(project=project, token=token)
+        annotator = PrivateAnnotator.objects.get(token=token)
     except (PrivateAnnotator.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Annotator with token {token} does not exist in project {project.name}'}
+        return 404, {'detail', f'Annotator with token {token} does not exist'}
+    project = annotator.project
     return [{
         **model_to_dict(entry),
         'project': project.name,
         'project_url': str(project.url),
-        'pre_annotations': entry.pre_annotations,
+        'pre_annotations': entry.unannotated_source.pre_annotations,
         'created_at': entry.created_at.isoformat(),
         'updated_at': entry.updated_at.isoformat(),
-        'context': entry.context if entry.context is not None else 'No context'
+        'context': entry.unannotated_source.context if entry.unannotated_source.context is not None else 'No context'
     } for entry in project.get_annotators_annotations(annotator)]
 
 

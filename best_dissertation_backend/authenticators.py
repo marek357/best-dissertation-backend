@@ -11,7 +11,8 @@ class PublicAnnotatorAdminAndContributorAuth(HttpBearer):
             print(f'trying to decode token: {token}')
             decoded_token = auth.verify_id_token(token)
             user_id = decoded_token['uid']
-        except Exception:
+        except Exception as e:
+            print(e)
             return False
         try:
             contributor = get_user_model().objects.get(username=user_id)
@@ -32,7 +33,7 @@ class PrivateAnnotatorAuth(APIKeyQuery):
             annotator = PrivateAnnotator.objects.get(token=token)
         except PrivateAnnotator.DoesNotExist:
             return False
-        if annotator.user.is_active:
+        if annotator.contributor.is_active:
             request.user = annotator.contributor
             return True
         return False

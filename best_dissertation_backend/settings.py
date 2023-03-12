@@ -30,6 +30,8 @@ env = environ.Env(
     EMAIL_HOST_PASSWORD=(str, ''),
 )
 
+environ.Env.read_env(BASE_DIR / '.env')
+
 EMAIL_HOST_USER = env('EMAIL_HOST_USER')
 
 firebase = firebase_admin.initialize_app(credentials)

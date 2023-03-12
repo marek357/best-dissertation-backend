@@ -319,6 +319,15 @@ class MachineTranslationProject(Project):
             unannotated_source=unannotated_source,
             annotator=annotator
         )
+        print('created a new entry')
+        print({
+            **model_to_dict(new_entry),
+            'project': self.name,
+            'project_url': str(self.url),
+            'annotator': annotator.contributor.username,
+            'fluency': new_entry.fluency,
+            'adequacy': new_entry.adequacy
+        })
         return {
             **model_to_dict(new_entry),
             'project': self.name,
@@ -332,20 +341,26 @@ class MachineTranslationProject(Project):
         # start by running data integrity checks
         # on the uploaded data to ensure that
         # data is well formated
+        reference_translation_field = text_field['reference_field']
+        machine_translation_system_translation_field = text_field['mt_system_translation']
+
         for index, entry in enumerate(unannotated_data):
             if type(entry) != dict:
                 return 400, {'detail': f'Uploaded data is not in a list of dictionaries format'}
             if context_field is not None and context_field not in entry:
                 return 400, {'detail': f'Context field provided, but row with index {index} is missing context value'}
-            if text_field not in entry:
-                return 400, {'detail': f'Text field missing from row with index {index}'}
+            if reference_translation_field not in entry:
+                return 400, {'detail': f'Reference translation field missing from row with index {index}'}
+            if machine_translation_system_translation_field not in entry:
+                return 400, {'detail': f'Reference translation field missing from row with index {index}'}
 
         # data has been checked for integrity violations
         # and now can be added to the database
         for entry in unannotated_data:
             context = entry.get(context_field, None)
             MachineTranslationProjectUnannotatedEntry.objects.create(
-                project=self, text=entry[text_field],
+                project=self, text=entry[reference_translation_field],
+                mt_system_translation=entry[machine_translation_system_translation_field],
                 context=context
             )
 
@@ -401,6 +416,10 @@ class TextClassificationProjectUnannotatedEntry(UnannotatedProjectEntry):
 
 
 class MachineTranslationProjectUnannotatedEntry(UnannotatedProjectEntry):
+    mt_system_translation = models.TextField(
+        verbose_name='Reference Translation'
+    )
+
     pre_annotation_adequacy = models.FloatField(
         null=True, blank=True,
         verbose_name='Pre-annotation adequacy'

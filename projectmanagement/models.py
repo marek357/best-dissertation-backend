@@ -294,7 +294,7 @@ class MachineTranslationProject(Project):
 
     @property
     def value_fields(self):
-        return ['fluecy', 'adequacy']
+        return ['fluency', 'adequacy']
 
     def get_imported_entry(self, entry_id):
         return MachineTranslationProjectUnannotatedEntry.objects.get(id=entry_id, project=self)

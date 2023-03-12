@@ -10,13 +10,14 @@ from django.core.exceptions import ValidationError
 from annotators.helpers import send_annotator_welcome_email
 from annotators.models import PrivateAnnotator
 from annotators.schemas import CreatePrivateAnnotatorSchema, PrivateAnnotatorEntryCreateSchema, PrivateAnnotatorEntryPatchSchema
+from django.db.utils import IntegrityError
 
 from projectmanagement.models import Project, ProjectEntry
 
 router = Router()
 
 
-@router.post('/projects/{project_url}/annotators', response={200: dict, 401: dict, 404: dict}, tags=['Private Annotators'])
+@router.post('/projects/{project_url}/annotators', response={200: dict, 401: dict, 404: dict, 400: dict}, tags=['Private Annotators'])
 def invite_annotator(request, project_url: str, private_annotator_data: CreatePrivateAnnotatorSchema):
     try:
         project = Project.objects.get(url=project_url)
@@ -28,9 +29,12 @@ def invite_annotator(request, project_url: str, private_annotator_data: CreatePr
         contributor = get_user_model().objects.get(
             username=private_annotator_data.username, email=private_annotator_data.email)
     except get_user_model().DoesNotExist:
-        contributor = get_user_model().objects.create_user(
-            username=private_annotator_data.username, email=private_annotator_data.email)
-        contributor.set_unusable_password()
+        try:
+            contributor = get_user_model().objects.create_user(
+                username=private_annotator_data.username, email=private_annotator_data.email)
+            contributor.set_unusable_password()
+        except IntegrityError:
+            return 404, {'detail': f'User with username {private_annotator_data.username} already exists'}
     if project.private_annotators.filter(contributor=contributor).exists():
         return 400, {'detail': f'Private Annotator {private_annotator_data.username} is already invited to the project'}
     annotator = PrivateAnnotator.objects.create(
@@ -166,7 +170,8 @@ def get_remaining_entries_for_annotation_private_annotator(request, token: str):
         return 404, {'detail', f'Annotator with token {token} does not exist'}
     project = annotator.project
     # https://stackoverflow.com/questions/2354284/django-queries-how-to-filter-objects-to-exclude-id-which-is-in-a-list
-    annotated = project.get_annotators_annotations(annotator).values('id')
+    annotated = project.get_annotators_annotations(
+        annotator).values('unannotated_source')
     remaining_to_be_annotated = project.imported_texts.exclude(
         id__in=annotated
     )
@@ -191,7 +196,10 @@ def get_entries__private_annotator(request, token: str):
     return [{
         **model_to_dict(entry),
         'project': project.name,
+        'project_type': project.project_type,
         'project_url': str(project.url),
+        'unannotated_source': model_to_dict(entry.unannotated_source),
+        'value_fields': project.value_fields,
         'pre_annotations': entry.unannotated_source.pre_annotations,
         'created_at': entry.created_at.isoformat(),
         'updated_at': entry.updated_at.isoformat(),

@@ -318,21 +318,36 @@ def export_project(request, project_url: str, export_type: str):
             'Content-Disposition': f'attachment; filename="{project.name}.csv"'
         })
         writer = csv.writer(response)
-        # write header row
-        writer.writerow([
-            'id', 'imported_text_source_id', 'text', *value_fields,
-            *[f'preannotation_{field}' for field in value_fields],
-            'created_at', 'updated_at'
-        ])
+        header_row_written = False
         for entry in project.entries:
+            parameters = entry.unannotated_source.parameters
+            if not header_row_written:
+                # write header row
+                writer.writerow([
+                    'id', 'imported_text_source_id', *parameters.keys(), *
+                    value_fields,
+                    *[f'preannotation_{field}' for field in value_fields],
+                    'created_at', 'updated_at'
+                ])
+                header_row_written = True
             preannotations = entry.unannotated_source.pre_annotations
             values = entry.values
             writer.writerow([
-                entry.id, entry.unannotated_source.id, entry.text,
+                entry.id, entry.unannotated_source.id,
+                *[parameter_value for _, parameter_value in parameters.items()],
                 *[values[value_field] for value_field in value_fields],
                 *[preannotations[value_field] for value_field in value_fields],
                 entry.created_at.isoformat(), entry.updated_at.isoformat()
             ])
+        if not header_row_written:
+            # write header row
+            writer.writerow([
+                'id', 'imported_text_source_id', 'text', *
+                value_fields,
+                *[f'preannotation_{field}' for field in value_fields],
+                'created_at', 'updated_at'
+            ])
+
     elif export_type == 'json':
         # https://stackoverflow.com/questions/1156246/having-django-serve-downloadable-files
         response = HttpResponse(content_type="application/force-download", headers={
@@ -340,11 +355,12 @@ def export_project(request, project_url: str, export_type: str):
         })
         export_data = []
         for entry in project.entries:
-            preannotations = entry.unannotated_source.pre_annotations
+            preannotations = {f'preannotation_{k}': v for k,
+                              v in entry.unannotated_source.pre_annotations.items()}
             export_data.append({
                 'id': entry.id,
                 'imported_text_source_id': entry.unannotated_source.id,
-                'text': entry.unannotated_source.text,
+                **entry.unannotated_source.parameters,
                 **entry.values, **preannotations,
                 'created_at': entry.created_at.isoformat(),
                 'updated_at': entry.updated_at.isoformat(),

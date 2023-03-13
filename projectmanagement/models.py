@@ -122,6 +122,10 @@ class UnannotatedProjectEntry(PolymorphicModel):
     def pre_annotations(self):
         raise NotImplementedError
 
+    @property
+    def parameters(self):
+        raise NotImplementedError
+
 
 class TextClassificationProjectEntry(ProjectEntry):
     classification = models.ForeignKey(
@@ -220,9 +224,14 @@ class TextClassificationProject(Project):
         return {
             **model_to_dict(new_entry),
             'project': self.name,
-            'project_url': self.url,
-            'annotator': annotator.contributor.username,
-            'classification': category.name
+            'project_type': self.project_type,
+            'project_url': str(self.url),
+            'unannotated_source': model_to_dict(new_entry.unannotated_source),
+            'value_fields': self.value_fields,
+            'pre_annotations': new_entry.unannotated_source.pre_annotations,
+            'created_at': new_entry.created_at.isoformat(),
+            'updated_at': new_entry.updated_at.isoformat(),
+            'context': new_entry.unannotated_source.context if new_entry.unannotated_source.context is not None else 'No context'
         }
 
     def add_unannotated_entries(self, unannotated_data, text_field, value_field, context_field):
@@ -319,22 +328,17 @@ class MachineTranslationProject(Project):
             unannotated_source=unannotated_source,
             annotator=annotator
         )
-        print('created a new entry')
-        print({
-            **model_to_dict(new_entry),
-            'project': self.name,
-            'project_url': str(self.url),
-            'annotator': annotator.contributor.username,
-            'fluency': new_entry.fluency,
-            'adequacy': new_entry.adequacy
-        })
         return {
             **model_to_dict(new_entry),
             'project': self.name,
-            'project_url': self.url,
-            'annotator': annotator.contributor.username,
-            'fluency': new_entry.fluency,
-            'adequacy': new_entry.adequacy
+            'project_type': self.project_type,
+            'project_url': str(self.url),
+            'unannotated_source': model_to_dict(new_entry.unannotated_source),
+            'value_fields': self.value_fields,
+            'pre_annotations': new_entry.unannotated_source.pre_annotations,
+            'created_at': new_entry.created_at.isoformat(),
+            'updated_at': new_entry.updated_at.isoformat(),
+            'context': new_entry.unannotated_source.context if new_entry.unannotated_source.context is not None else 'No context'
         }
 
     def add_unannotated_entries(self, unannotated_data, text_field, context_field, **kwargs):
@@ -414,6 +418,10 @@ class TextClassificationProjectUnannotatedEntry(UnannotatedProjectEntry):
             else 'No preannotation'
         }
 
+    @property
+    def parameters(self):
+        return {'text': self.text}
+
 
 class MachineTranslationProjectUnannotatedEntry(UnannotatedProjectEntry):
     mt_system_translation = models.TextField(
@@ -443,3 +451,7 @@ class MachineTranslationProjectUnannotatedEntry(UnannotatedProjectEntry):
             return_dict['fluency'] = self.pre_annotation_fluency
 
         return return_dict
+
+    @property
+    def parameters(self):
+        return {'reference_translation': self.text, 'mt_system_translation': self.mt_system_translation}

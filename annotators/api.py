@@ -22,7 +22,7 @@ def invite_annotator(request, project_url: str, private_annotator_data: CreatePr
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
     if not project.contributor_is_admin(request.user):
         return 401, {'detail': f'Contributor is not project adminstrator'}
     try:
@@ -56,7 +56,7 @@ def get_project_private_annotators(request, project_url: str):
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
     if not project.contributor_is_admin(request.user):
         return 401, {'detail': f'Contributor is not project adminstrator'}
     return 200, [{
@@ -85,6 +85,8 @@ def get_project_private_annotator(request, private_annotator_token: str):
                 Annopedia Team
             '''
         }
+    print(private_annotator.contributor.username,
+          private_annotator.project.name, private_annotator.project.project_type)
     return 200, {
         **model_to_dict(private_annotator),
         'project_type': private_annotator.project.project_type,
@@ -101,7 +103,7 @@ def resend_private_annotator_invitation(request, project_url: str, private_annot
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
     if not project.contributor_is_admin(request.user):
         return 401, {'detail': f'Contributor is not project adminstrator'}
     try:
@@ -132,7 +134,7 @@ def toggle_annotator_status(request, project_url: str, annotator_token: str, ann
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
     if not project.contributor_is_admin(request.user):
         return 401, {'detail': f'Contributor is not project adminstrator'}
     try:
@@ -140,7 +142,7 @@ def toggle_annotator_status(request, project_url: str, annotator_token: str, ann
             project=project, token=annotator_token
         )
     except PrivateAnnotator.DoesNotExist:
-        return 404, {'detail', f'Annotator with token {annotator_token} not found in project {project.name}'}
+        return 404, {'detail': f'Annotator with token {annotator_token} not found in project {project.name}'}
     annotator.contributor.is_active = annotator_status
     annotator.contributor.save()
     return 200, {
@@ -157,7 +159,7 @@ def create_private_annotators_entry(request, token: str, entry_data: PrivateAnno
     try:
         annotator = PrivateAnnotator.objects.get(token=token)
     except PrivateAnnotator.DoesNotExist:
-        return 404, {'detail', f'Annotator with token {token} not found'}
+        return 404, {'detail': f'Annotator with token {token} not found'}
     project = annotator.project
     return project.add_entry(annotator, entry_data)
 
@@ -167,7 +169,7 @@ def get_remaining_entries_for_annotation_private_annotator(request, token: str):
     try:
         annotator = PrivateAnnotator.objects.get(token=token)
     except (PrivateAnnotator.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Annotator with token {token} does not exist'}
+        return 404, {'detail': f'Annotator with token {token} does not exist'}
     project = annotator.project
     # https://stackoverflow.com/questions/2354284/django-queries-how-to-filter-objects-to-exclude-id-which-is-in-a-list
     annotated = project.get_annotators_annotations(
@@ -191,7 +193,7 @@ def get_entries__private_annotator(request, token: str):
     try:
         annotator = PrivateAnnotator.objects.get(token=token)
     except (PrivateAnnotator.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Annotator with token {token} does not exist'}
+        return 404, {'detail': f'Annotator with token {token} does not exist'}
     project = annotator.project
     return [{
         **model_to_dict(entry),
@@ -207,20 +209,37 @@ def get_entries__private_annotator(request, token: str):
     } for entry in project.get_annotators_annotations(annotator)]
 
 
+@router.get('/projects/categories', response={200: list, 401: dict, 404: dict}, tags=['Private Annotators'])
+def get_categories_private_annotator(request, token: str):
+    try:
+        annotator = PrivateAnnotator.objects.get(token=token)
+    except (PrivateAnnotator.DoesNotExist, ValidationError):
+        return 404, {'detail': f'Annotator with token {token} does not exist'}
+    project = annotator.project
+    if project.project_type not in ['Text Classification']:
+        return 404, {'detail': 'Project does not have a category type'}
+    return [
+        {
+            **model_to_dict(category),
+            'project_url': str(project.url)
+        } for category in project.categories
+    ]
+
+
 @router.patch('/projects/{project_url}/entry', response={200: dict, 401: dict, 404: dict}, tags=['Private Annotators'])
 def modify_annotators_entry(request, project_url: str, token: str, entry_id: int, patch_data: PrivateAnnotatorEntryPatchSchema):
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
     try:
         annotator = PrivateAnnotator.objects.get(project=project, token=token)
     except (PrivateAnnotator.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Annotator with token {token} does not exist in project {project.name}'}
+        return 404, {'detail': f'Annotator with token {token} does not exist in project {project.name}'}
     try:
         entry = ProjectEntry.objects.get(
             id=entry_id, project=project, annotator=annotator
         )
     except (PrivateAnnotator.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Entry with ID {entry_id}, created by {annotator.contributor.username} does not exist in project {project.name}'}
+        return 404, {'detail': f'Entry with ID {entry_id}, created by {annotator.contributor.username} does not exist in project {project.name}'}
     return entry.update_with_data(patch_data)

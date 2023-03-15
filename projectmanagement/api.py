@@ -10,7 +10,7 @@ from django.core.exceptions import ValidationError
 from annotators.models import PublicAnnotator
 from projectmanagement.models import Category, MachineTranslationProject, Project, ProjectEntry, TextClassificationProject, UnannotatedProjectEntry
 
-from projectmanagement.schemas import CreateProjectSchema, EntrySchema, ProjectEntryPatchSchema, ProjectPatchSchema, ProjectSchema, TextClassificationOutSchema as TCOutSchema, MachineTranslationOutSchema as MTOutSchema
+from projectmanagement.schemas import CategoryInSchema, CreateProjectSchema, EntrySchema, ProjectEntryPatchSchema, ProjectPatchSchema, ProjectSchema, TextClassificationOutSchema as TCOutSchema, MachineTranslationOutSchema as MTOutSchema
 
 router = Router()
 
@@ -86,8 +86,12 @@ def get_project(request, project_url: str):
     }
     if project.project_type in ['Text Classification']:
         return_dict['categories'] = [
-            category.name for category in project.categories
+            {
+                **model_to_dict(category),
+                'project_url': str(project.url)
+            } for category in project.categories
         ]
+    print(return_dict)
     return return_dict
 
 
@@ -109,18 +113,51 @@ def add_administrator(request, project_url: str, username: str, email: str):
     return 200, {'detail': f'Administrator {username} added to project {project.name}'}
 
 
-@router.post('/classification/{project_url}/category', response={200: dict, 401: dict, 404: dict}, tags=['Project Management'])
-def create_classification_category(request, project_url: str, name: str, description: str, key_binding: str):
+@router.post('/classification/{project_url}/category', response={200: dict, 400: dict, 401: dict, 404: dict}, tags=['Project Management'])
+def create_classification_category(request, project_url: str, category_data: CategoryInSchema):
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
-    category = Category.objects.create(
-        project=project, name=name, description=description, key_binding=key_binding
-    )
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
+    if project.project_type not in ['Text Classification']:
+        return 404, {'detail': 'Project does not have a category type'}
+    try:
+        category = Category.objects.create(
+            project=project, name=category_data.name,
+            description=category_data.description,
+            key_binding=category_data.key_binding
+        )
+    except Exception as e:
+        return 400, {'detail': f'Error: {e}'}
     return {
         **model_to_dict(category),
-        'project_url': project.url
+        'project_url': str(project.url)
+    }
+
+
+@router.delete('/classification/{project_url}/category', response={200: dict, 400: dict, 401: dict, 404: dict}, tags=['Project Management'])
+def delete_classification_category(request, project_url: str, category_id: int):
+    try:
+        project = Project.objects.get(url=project_url)
+    except (Project.DoesNotExist, ValidationError):
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
+    if project.project_type not in ['Text Classification']:
+        return 404, {'detail': 'Project does not have a category type'}
+
+    # if not project.contributor_is_admin(request.user):
+    #     return 401, {'detail': f'Contributor is not project adminstrator'}
+
+    try:
+        category = Category.objects.get(
+            id=category_id, project=project
+        )
+    except Category.DoesNotExist:
+        return 400, {'detail': f'Category with ID {category_id} is not found in the project {project.name}'}
+    category.delete()
+    return {
+        **model_to_dict(category),
+        'project_url': str(project.url),
+        'category_id': category_id
     }
 
 

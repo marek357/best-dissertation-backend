@@ -28,7 +28,7 @@ class ProjectPatchSchema(Schema):
 
 
 class TextClassificationOutSchema(ProjectSchema):
-    categories: List[str]
+    categories: List[dict]
 
 
 class MachineTranslationOutSchema(ProjectSchema):
@@ -44,3 +44,9 @@ class ProjectEntryPatchSchema(ProjectSchema):
 class EntrySchema(Schema):
     unannotated_source: int
     payload: dict
+
+
+class CategoryInSchema(Schema):
+    name: str
+    description: str
+    key_binding: str

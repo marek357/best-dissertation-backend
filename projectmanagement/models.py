@@ -204,7 +204,7 @@ class TextClassificationProject(Project):
         except KeyError:
             return 404, {'detail': f'Missing category name in payload'}
         except Category.DoesNotExist:
-            return 404, {'detail': f'Category {entry_data["category-name"]} does not exist in project {self.name}'}
+            return 404, {'detail': f'Category {entry_data.payload["category-name"]} does not exist in project {self.name}'}
         try:
             unannotated_source = UnannotatedProjectEntry.objects.get(
                 id=entry_data.unannotated_source, project=self
@@ -402,6 +402,10 @@ class Category(models.Model):
         auto_now=True, verbose_name='Category Created at'
     )
 
+    class Meta:
+        unique_together = (('project', 'name', 'description'),
+                           ('project', 'name'), ('project', 'key_binding'))
+
 
 class TextClassificationProjectUnannotatedEntry(UnannotatedProjectEntry):
     pre_annotation = models.ForeignKey(
@@ -413,9 +417,9 @@ class TextClassificationProjectUnannotatedEntry(UnannotatedProjectEntry):
     @property
     def pre_annotations(self):
         return {
-            'category': self.pre_annotation
-            if self.pre_annotation is not None
-            else 'No preannotation'
+            'category': (self.pre_annotation.name
+                         if self.pre_annotation is not None
+                         else 'No preannotation')
         }
 
     @property

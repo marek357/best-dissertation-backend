@@ -44,7 +44,8 @@ SECRET_KEY = "django-insecure-=@kzx!-dry!pis5w02#t(rt8s_^!*9j1j%$@8#r((oqstxb9ti
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost']
+ALLOWED_HOSTS = ['localhost', 'annopedia.marekmasiak.tech',
+                 'mt.annopedia.marekmasiak.tech']
 
 
 # Application definition

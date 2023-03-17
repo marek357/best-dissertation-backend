@@ -33,11 +33,16 @@ class Project(PolymorphicModel):
 
     @property
     def imported_texts(self):
-        raise NotImplementedError
+        return UnannotatedProjectEntry.objects.filter(project=self)
 
     @property
     def entries(self):
-        raise NotImplementedError
+        return ProjectEntry.objects.filter(project=self)
+
+    @property
+    def unannotated_texts(self):
+        annotated = self.entries.values('unannotated_source')
+        return self.imported_texts.exclude(id__in=annotated)
 
     @property
     def project_type(self):
@@ -55,7 +60,7 @@ class Project(PolymorphicModel):
         return self.administrators.filter(id=contributor.id).exists()
 
     def get_imported_entry(self, entry_id):
-        raise NotImplementedError
+        return UnannotatedProjectEntry.objects.get(id=entry_id, project=self)
 
     def add_entry(self, contributor, entry_data):
         raise NotImplementedError
@@ -67,7 +72,7 @@ class Project(PolymorphicModel):
         raise NotImplementedError
 
     def get_annotators_annotations(self, annotator):
-        raise NotImplementedError
+        return ProjectEntry.objects.filter(project=self, annotator=annotator)
 
     def get_statistics(self):
         raise NotImplementedError
@@ -100,6 +105,10 @@ class ProjectEntry(PolymorphicModel):
     def values(self):
         raise NotImplementedError
 
+    @property
+    def non_standard_fix(self):
+        return {}
+
     def update_with_data(self, update_data):
         raise NotImplementedError
 
@@ -127,6 +136,14 @@ class UnannotatedProjectEntry(PolymorphicModel):
         raise NotImplementedError
 
 
+class TextHighlight(PolymorphicModel):
+    span_start = models.IntegerField(verbose_name='Beginning of text span')
+    span_end = models.IntegerField(verbose_name='End of text span')
+    category = models.CharField(
+        max_length=255, verbose_name='Text span category'
+    )
+
+
 class TextClassificationProjectEntry(ProjectEntry):
     classification = models.ForeignKey(
         'Category', on_delete=models.DO_NOTHING,
@@ -135,7 +152,7 @@ class TextClassificationProjectEntry(ProjectEntry):
 
     @property
     def values(self):
-        return {'category': self.classification}
+        return {'category': self.classification.name}
 
     def update_with_data(self, update_data):
         if not update_data.classification:
@@ -152,20 +169,36 @@ class TextClassificationProjectEntry(ProjectEntry):
         return 200, model_to_dict(self)
 
 
-class MachineTranslationProjectEntry(ProjectEntry):
-    fluency = models.FloatField(verbose_name='Fluency')
+class MachineTranslationAdequacyProjectEntry(ProjectEntry):
+    annotator_comment = models.TextField(null=True, blank=True)
     adequacy = models.FloatField(verbose_name='Adequacy')
+    source_text_highlights = models.ManyToManyField(
+        TextHighlight, blank=True, verbose_name='Machine Translation Adequacy Source Text Highlights', related_name='adequacy_source_text'
+    )
+    target_text_highlights = models.ManyToManyField(
+        TextHighlight, blank=True, verbose_name='Machine Translation Adequacy Target Text Highlights'
+    )
 
     @property
     def values(self):
         return {
-            'fluency': self.fluency,
             'adequacy': self.adequacy
         }
 
+    @property
+    def non_standard_fix(self):
+        return {
+            'source_text_highlights': [
+                (highlight.span_start, highlight.span_end, highlight.category)
+                for highlight in self.source_text_highlights.all()
+            ],
+            'target_text_highlights': [
+                (highlight.span_start, highlight.span_end, highlight.category)
+                for highlight in self.target_text_highlights.all()
+            ],
+        }
+
     def update_with_data(self, update_data):
-        if update_data.fluency:
-            self.fluency = update_data.fluency
         if update_data.adequacy:
             self.adequacy = update_data.adequacy
         self.updated_at = datetime.now()
@@ -173,11 +206,37 @@ class MachineTranslationProjectEntry(ProjectEntry):
         return 200, model_to_dict(self)
 
 
-class TextClassificationProject(Project):
-    @property
-    def imported_texts(self):
-        return TextClassificationProjectUnannotatedEntry.objects.filter(project=self)
+class MachineTranslationFluencyProjectEntry(ProjectEntry):
+    annotator_comment = models.TextField(null=True, blank=True)
+    target_text_highlights = models.ManyToManyField(
+        TextHighlight, blank=True, verbose_name='Machine Translation Fluency Highlights', related_name='fluency_source_text'
+    )
+    fluency = models.FloatField(verbose_name='Fluency')
 
+    @property
+    def values(self):
+        return {
+            'fluency': self.fluency,
+        }
+
+    @property
+    def non_standard_fix(self):
+        return {
+            'target_text_highlights': [
+                (highlight.span_start, highlight.span_end, highlight.category)
+                for highlight in self.target_text_highlights.all()
+            ],
+        }
+
+    def update_with_data(self, update_data):
+        if update_data.fluency:
+            self.fluency = update_data.fluency
+        self.updated_at = datetime.now()
+        self.save()
+        return 200, model_to_dict(self)
+
+
+class TextClassificationProject(Project):
     @property
     def project_type(self):
         return 'Text Classification'
@@ -187,15 +246,8 @@ class TextClassificationProject(Project):
         return Category.objects.filter(project=self)
 
     @property
-    def entries(self):
-        return TextClassificationProjectEntry.objects.filter(project=self)
-
-    @property
     def value_fields(self):
         return ['classification']
-
-    def get_imported_entry(self, entry_id):
-        return TextClassificationProjectUnannotatedEntry.objects.get(id=entry_id, project=self)
 
     def add_entry(self, annotator, entry_data):
         try:
@@ -273,9 +325,6 @@ class TextClassificationProject(Project):
 
         return 200, {'detail': f'Succesfully created {len(unannotated_data)} unannotated entries'}
 
-    def get_annotators_annotations(self, annotator):
-        return TextClassificationProjectEntry.objects.filter(project=self, annotator=annotator)
-
     def get_statistics(self):
         return {
             'categories': [
@@ -290,27 +339,24 @@ class TextClassificationProject(Project):
 
 class MachineTranslationProject(Project):
     @property
-    def imported_texts(self):
-        return MachineTranslationProjectUnannotatedEntry.objects.filter(project=self)
+    def machine_translation_variation(self):
+        raise NotImplementedError
 
     @property
     def project_type(self):
-        return 'Machine Translation'
-
-    @property
-    def entries(self):
-        return MachineTranslationProjectEntry.objects.filter(project=self)
+        raise NotImplementedError
 
     @property
     def value_fields(self):
-        return ['fluency', 'adequacy']
+        return [self.machine_translation_variation]
 
-    def get_imported_entry(self, entry_id):
-        return MachineTranslationProjectUnannotatedEntry.objects.get(id=entry_id, project=self)
+    @property
+    def annotated_entry_class(self):
+        raise NotImplementedError
 
     def add_entry(self, annotator, entry_data):
-        if None in [entry_data.payload.get('adequacy', None), entry_data.payload.get('fluency', None)]:
-            return 400, {'details': 'Missing data in request'}
+        if entry_data.payload.get(self.machine_translation_variation, None) is None:
+            return 400, {'details': f'Missing {self.machine_translation_variation} data in request'}
         try:
             unannotated_source = UnannotatedProjectEntry.objects.get(
                 id=entry_data.unannotated_source, project=self
@@ -322,13 +368,46 @@ class MachineTranslationProject(Project):
                     does not exist in project {self.name}
                 '''
             }
-        new_entry = MachineTranslationProjectEntry.objects.create(
-            project=self, adequacy=entry_data.payload.get('adequacy', None),
-            fluency=entry_data.payload.get('fluency', None),
-            unannotated_source=unannotated_source,
-            annotator=annotator
-        )
-        return {
+        new_entry_dict = {
+            'project': self,
+            self.machine_translation_variation: entry_data.payload.get(
+                self.machine_translation_variation, None
+            ),
+            'unannotated_source': unannotated_source,
+            'annotator': annotator
+        }
+
+        if entry_data.payload.get('annotator_comment', None) is not None:
+            new_entry_dict['annotator_comment'] = entry_data.payload.get(
+                'annotator_comment', None
+            )
+
+        new_entry = self.annotated_entry_class.objects.create(**new_entry_dict)
+
+        if entry_data.payload.get('target_text_highlights', None) is not None:
+            for highlight in entry_data.payload.get('target_text_highlights'):
+                beginning = highlight.get('beginning', None)
+                end = highlight.get('end', None)
+                category = highlight.get('category', None)
+                if None in [beginning, end, category]:
+                    pass
+                highlight = TextHighlight.objects.create(
+                    span_start=beginning, span_end=end, category=category)
+                new_entry.target_text_highlights.add(highlight)
+
+        if self.machine_translation_variation == 'adequacy':
+            if entry_data.payload.get('source_text_highlights', None) is not None:
+                for highlight in entry_data.payload.get('source_text_highlights'):
+                    beginning = highlight.get('beginning', None)
+                    end = highlight.get('end', None)
+                    category = highlight.get('category', None)
+                    if None in [beginning, end, category]:
+                        pass
+                    highlight = TextHighlight.objects.create(
+                        span_start=beginning, span_end=end, category=category)
+                    new_entry.source_text_highlights.add(highlight)
+
+        return_dict = {
             **model_to_dict(new_entry),
             'project': self.name,
             'project_type': self.project_type,
@@ -338,8 +417,85 @@ class MachineTranslationProject(Project):
             'pre_annotations': new_entry.unannotated_source.pre_annotations,
             'created_at': new_entry.created_at.isoformat(),
             'updated_at': new_entry.updated_at.isoformat(),
-            'context': new_entry.unannotated_source.context if new_entry.unannotated_source.context is not None else 'No context'
+            'context': new_entry.unannotated_source.context if new_entry.unannotated_source.context is not None else 'No context',
+            'target_text_highlights': [
+                (highlight.span_start, highlight.span_end, highlight.category)
+                for highlight in new_entry.target_text_highlights.all()
+            ]
         }
+
+        if self.machine_translation_variation == 'adequacy':
+            return_dict['source_text_highlights'] = [
+                (highlight.span_start, highlight.span_end, highlight.category)
+                for highlight in new_entry.source_text_highlights.all()
+            ]
+
+        return return_dict
+
+    def get_statistics(self):
+        # https://stackoverflow.com/questions/28607727/how-to-calculate-average-in-django/50087144#50087144
+        aggregated_value = self.entries.values(
+            self.machine_translation_variation)
+        return {
+            'averages': {
+                self.machine_translation_variation: aggregated_value.aggregate(
+                    avg_fluency=Avg(self.machine_translation_variation)
+                )
+            }
+        }
+
+
+class MachineTranslationFluencyProject(MachineTranslationProject):
+    @property
+    def machine_translation_variation(self):
+        return 'fluency'
+
+    @property
+    def project_type(self):
+        return 'Machine Translation Fluency'
+
+    @property
+    def annotated_entry_class(self):
+        return MachineTranslationFluencyProjectEntry
+
+    def add_unannotated_entries(self, unannotated_data, text_field, context_field, **kwargs):
+        # start by running data integrity checks
+        # on the uploaded data to ensure that
+        # data is well formated
+        machine_translation_system_translation_field = text_field['mt_system_translation']
+
+        for index, entry in enumerate(unannotated_data):
+            if type(entry) != dict:
+                return 400, {'detail': f'Uploaded data is not in a list of dictionaries format'}
+            # if context_field is not None and context_field not in entry:
+            #     return 400, {'detail': f'Context field provided, but row with index {index} is missing context value'}
+            if machine_translation_system_translation_field not in entry:
+                return 400, {'detail': f'Reference translation field missing from row with index {index}'}
+
+        # data has been checked for integrity violations
+        # and now can be added to the database
+        for entry in unannotated_data:
+            context = entry.get(context_field, None)
+            MachineTranslationFluencyProjectUnannotatedEntry.objects.create(
+                project=self, text=entry[machine_translation_system_translation_field],
+                context=context
+            )
+
+        return 200, {'detail': f'Succesfully created {len(unannotated_data)} unannotated entries'}
+
+
+class MachineTranslationAdequacyProject(MachineTranslationProject):
+    @property
+    def machine_translation_variation(self):
+        return 'adequacy'
+
+    @property
+    def project_type(self):
+        return 'Machine Translation Adequacy'
+
+    @property
+    def annotated_entry_class(self):
+        return MachineTranslationAdequacyProjectEntry
 
     def add_unannotated_entries(self, unannotated_data, text_field, context_field, **kwargs):
         # start by running data integrity checks
@@ -351,8 +507,8 @@ class MachineTranslationProject(Project):
         for index, entry in enumerate(unannotated_data):
             if type(entry) != dict:
                 return 400, {'detail': f'Uploaded data is not in a list of dictionaries format'}
-            if context_field is not None and context_field not in entry:
-                return 400, {'detail': f'Context field provided, but row with index {index} is missing context value'}
+            # if context_field is not None and context_field not in entry:
+            #     return 400, {'detail': f'Context field provided, but row with index {index} is missing context value'}
             if reference_translation_field not in entry:
                 return 400, {'detail': f'Reference translation field missing from row with index {index}'}
             if machine_translation_system_translation_field not in entry:
@@ -362,27 +518,13 @@ class MachineTranslationProject(Project):
         # and now can be added to the database
         for entry in unannotated_data:
             context = entry.get(context_field, None)
-            MachineTranslationProjectUnannotatedEntry.objects.create(
+            MachineTranslationAdequacyProjectUnannotatedEntry.objects.create(
                 project=self, text=entry[reference_translation_field],
                 mt_system_translation=entry[machine_translation_system_translation_field],
                 context=context
             )
 
         return 200, {'detail': f'Succesfully created {len(unannotated_data)} unannotated entries'}
-
-    def get_annotators_annotations(self, annotator):
-        return MachineTranslationProjectEntry.objects.filter(project=self, annotator=annotator)
-
-    def get_statistics(self):
-        # https://stackoverflow.com/questions/28607727/how-to-calculate-average-in-django/50087144#50087144
-        fluency = self.entries.values('fluency')
-        adequacy = self.entries.values('adequacy')
-        return {
-            'averages': {
-                'fluency': fluency.aggregate(avg_fluency=Avg('fluency')),
-                'adequacy': adequacy.aggregate(avg_adequacy=Avg('adequacy'))
-            }
-        }
 
 
 class Category(models.Model):
@@ -427,7 +569,7 @@ class TextClassificationProjectUnannotatedEntry(UnannotatedProjectEntry):
         return {'text': self.text}
 
 
-class MachineTranslationProjectUnannotatedEntry(UnannotatedProjectEntry):
+class MachineTranslationAdequacyProjectUnannotatedEntry(UnannotatedProjectEntry):
     mt_system_translation = models.TextField(
         verbose_name='Reference Translation'
     )
@@ -436,6 +578,24 @@ class MachineTranslationProjectUnannotatedEntry(UnannotatedProjectEntry):
         null=True, blank=True,
         verbose_name='Pre-annotation adequacy'
     )
+
+    @property
+    def pre_annotations(self):
+        return_dict = {
+            'adequacy': 'No annotation',
+        }
+
+        if self.pre_annotation_adequacy:
+            return_dict['adequacy'] = self.pre_annotation_adequacy
+
+        return return_dict
+
+    @property
+    def parameters(self):
+        return {'reference_translation': self.text, 'mt_system_translation': self.mt_system_translation}
+
+
+class MachineTranslationFluencyProjectUnannotatedEntry(UnannotatedProjectEntry):
     pre_annotation_fluency = models.FloatField(
         null=True, blank=True,
         verbose_name='Pre-annotation fluency'
@@ -444,12 +604,8 @@ class MachineTranslationProjectUnannotatedEntry(UnannotatedProjectEntry):
     @property
     def pre_annotations(self):
         return_dict = {
-            'adequacy': 'No annotation',
-            'fluency': 'No annotation'
+            'fluency': 'No annotation',
         }
-
-        if self.pre_annotation_adequacy:
-            return_dict['adequacy'] = self.pre_annotation_adequacy
 
         if self.pre_annotation_fluency:
             return_dict['fluency'] = self.pre_annotation_fluency
@@ -458,4 +614,4 @@ class MachineTranslationProjectUnannotatedEntry(UnannotatedProjectEntry):
 
     @property
     def parameters(self):
-        return {'reference_translation': self.text, 'mt_system_translation': self.mt_system_translation}
+        return {'mt_system_translation': self.text}

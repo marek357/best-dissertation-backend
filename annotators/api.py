@@ -9,10 +9,10 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from annotators.helpers import send_annotator_welcome_email
 from annotators.models import PrivateAnnotator
-from annotators.schemas import CreatePrivateAnnotatorSchema, PrivateAnnotatorEntryCreateSchema, PrivateAnnotatorEntryPatchSchema
+from annotators.schemas import CreatePrivateAnnotatorSchema, PrivateAnnotatorEntryCreateSchema, PrivateAnnotatorEntryPatchSchema, PrivateAnnotatorHiglightPatchSchema
 from django.db.utils import IntegrityError
 
-from projectmanagement.models import Project, ProjectEntry
+from projectmanagement.models import Project, ProjectEntry, TextHighlight
 
 router = Router()
 
@@ -40,8 +40,8 @@ def invite_annotator(request, project_url: str, private_annotator_data: CreatePr
     annotator = PrivateAnnotator.objects.create(
         project=project, contributor=contributor, inviting_contributor=request.user, token=uuid4().hex
     )
-    if private_annotator_data.send_email:
-        send_annotator_welcome_email(annotator, request.user, project)
+    # if private_annotator_data.send_email:
+    #     send_annotator_welcome_email(annotator, request.user, project)
     return 200, {
         **model_to_dict(annotator),
         'inviting_contributor': request.user.username,
@@ -154,7 +154,7 @@ def toggle_annotator_status(request, project_url: str, annotator_token: str, ann
     }
 
 
-@router.post('/projects/entry', response={200: dict, 401: dict, 404: dict}, tags=['Private Annotators'])
+@router.post('/projects/entry', response={200: dict, 401: dict, 404: dict, 400: dict}, tags=['Private Annotators'])
 def create_private_annotators_entry(request, token: str, entry_data: PrivateAnnotatorEntryCreateSchema):
     try:
         annotator = PrivateAnnotator.objects.get(token=token)
@@ -205,7 +205,8 @@ def get_entries__private_annotator(request, token: str):
         'pre_annotations': entry.unannotated_source.pre_annotations,
         'created_at': entry.created_at.isoformat(),
         'updated_at': entry.updated_at.isoformat(),
-        'context': entry.unannotated_source.context if entry.unannotated_source.context is not None else 'No context'
+        'context': entry.unannotated_source.context if entry.unannotated_source.context is not None else 'No context',
+        **entry.non_standard_fix
     } for entry in project.get_annotators_annotations(annotator)]
 
 
@@ -226,16 +227,13 @@ def get_categories_private_annotator(request, token: str):
     ]
 
 
-@router.patch('/projects/{project_url}/entry', response={200: dict, 401: dict, 404: dict}, tags=['Private Annotators'])
-def modify_annotators_entry(request, project_url: str, token: str, entry_id: int, patch_data: PrivateAnnotatorEntryPatchSchema):
+@router.patch('/projects/entry', response={200: dict, 401: dict, 404: dict}, tags=['Private Annotators'])
+def modify_annotators_entry(request, token: str, entry_id: int, patch_data: PrivateAnnotatorEntryPatchSchema):
     try:
-        project = Project.objects.get(url=project_url)
-    except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail': f'Project with url {project_url} does not exist'}
-    try:
-        annotator = PrivateAnnotator.objects.get(project=project, token=token)
+        annotator = PrivateAnnotator.objects.get(token=token)
     except (PrivateAnnotator.DoesNotExist, ValidationError):
-        return 404, {'detail': f'Annotator with token {token} does not exist in project {project.name}'}
+        return 404, {'detail': f'Annotator with token {token} does not exist'}
+    project = annotator.project
     try:
         entry = ProjectEntry.objects.get(
             id=entry_id, project=project, annotator=annotator
@@ -243,3 +241,51 @@ def modify_annotators_entry(request, project_url: str, token: str, entry_id: int
     except (PrivateAnnotator.DoesNotExist, ValidationError):
         return 404, {'detail': f'Entry with ID {entry_id}, created by {annotator.contributor.username} does not exist in project {project.name}'}
     return entry.update_with_data(patch_data)
+
+
+@router.patch('/projects/', response={200: dict, 401: dict, 404: dict}, tags=['Private Annotators'])
+def modify_annotators_highlight(request, token: str, patch_data: PrivateAnnotatorHiglightPatchSchema):
+    try:
+        annotator = PrivateAnnotator.objects.get(token=token)
+    except (PrivateAnnotator.DoesNotExist, ValidationError):
+        return 404, {'detail': f'Annotator with token {token} does not exist'}
+    try:
+        higlight = TextHighlight.objects.get(
+            id=patch_data.highlight_id
+        )
+    except (TextHighlight.DoesNotExist, ValidationError):
+        return 404, {'detail': f'Higlight with ID {patch_data.highlight_id}, created by {annotator.contributor.username} does not exist in project {annotator.project.name}'}
+    try:
+        entry = higlight.project_entry_set.first()
+    except ProjectEntry.DoesNotExist:
+        return 404, {'detail': f'Integrity Error'}
+    if annotator != entry.annotator:
+        return 401, {'detail': f'Annotator is not annotator'}
+    higlight.classification = patch_data.classification
+    higlight.save()
+    return 200, model_to_dict(higlight)
+
+
+@router.delete('/projects/', response={200: dict, 401: dict, 404: dict}, tags=['Private Annotators'])
+def delete_annotators_highlight(request, token: str, highlight_id: int):
+    try:
+        annotator = PrivateAnnotator.objects.get(token=token)
+    except (PrivateAnnotator.DoesNotExist, ValidationError):
+        return 404, {'detail': f'Annotator with token {token} does not exist'}
+    try:
+        higlight = TextHighlight.objects.get(
+            id=highlight_id
+        )
+    except (TextHighlight.DoesNotExist, ValidationError):
+        return 404, {'detail': f'Higlight with ID {highlight_id}, created by {annotator.contributor.username} does not exist in project {annotator.project.name}'}
+    try:
+        entry = higlight.project_entry_set.first()
+    except ProjectEntry.DoesNotExist:
+        return 404, {'detail': f'Integrity Error'}
+    if annotator != entry.annotator:
+        return 401, {'detail': f'Annotator is not annotator'}
+    higlight.delete()
+    return 200, {
+        **model_to_dict(higlight),
+        'higlight_id': highlight_id
+    }

@@ -17,3 +17,8 @@ class CreatePrivateAnnotatorSchema(Schema):
     email: str
     username: str
     send_email: Optional[bool] = True
+
+
+class PrivateAnnotatorHiglightPatchSchema(Schema):
+    highlight_id: int
+    classification: str

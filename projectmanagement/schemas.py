@@ -13,7 +13,7 @@ class ProjectSchema(Schema):
     id: int
     name: str
     description: str
-    administrators: List[str]
+    administrators: List[dict]
     created_at: str
     updated_at: str
     type: str
@@ -50,3 +50,7 @@ class CategoryInSchema(Schema):
     name: str
     description: str
     key_binding: str
+
+
+class ProjectAdministratorInSchema(Schema):
+    email: str

@@ -30,7 +30,7 @@ def create_project(request, project_data: CreateProjectSchema):
             name=project_data.name, description=project_data.description, talk_markdown=project_data.talk_markdown
         )
     else:
-        return 404, {'detail', f'Project type {project_data.project_type} is not supported'}
+        return 404, {'detail': f'Project type {project_data.project_type} is not supported'}
     project.administrators.add(request.user)
     return {
         **model_to_dict(project),
@@ -67,7 +67,7 @@ def delete_project(request, project_url: str):
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
     if not project.contributor_is_admin(request.user):
         return 401, {'detail': f'Contributor is not project adminstrator'}
     project.delete()
@@ -79,7 +79,7 @@ def get_project(request, project_url: str):
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
     return_dict = {
         **model_to_dict(project),
         'type': project.project_type,
@@ -104,7 +104,7 @@ def add_administrator(request, project_url: str, new_administrator: ProjectAdmin
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
     if not project.contributor_is_admin(request.user):
         return 401, {'detail': f'Contributor is not project adminstrator'}
 
@@ -170,7 +170,7 @@ def create_entry(request, project_url: str, entry: EntrySchema):
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
     try:
         annotator = PublicAnnotator.objects.get(
             contributor=request.user
@@ -187,7 +187,7 @@ def get_project_entries(request, project_url: str):
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
     return_list = [{
         **model_to_dict(entry),
         'value': entry.values,
@@ -220,7 +220,7 @@ def delete_project_entry(request, project_url: str, entry_id: int):
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
     if not project.contributor_is_admin(request.user):
         return 401, {'detail': f'Contributor is not project adminstrator'}
     try:
@@ -228,7 +228,7 @@ def delete_project_entry(request, project_url: str, entry_id: int):
     except (ProjectEntry.DoesNotExist, ValidationError, ValueError):
         return 404, {'detail': f'Entry with ID: {entry_id} not found'}
     entry.delete()
-    return 200, {'detail', f'Successfully deleted entry {entry_id}'}
+    return 200, {'detail': f'Successfully deleted entry {entry_id}'}
 
 
 @router.patch('/projects/{project_url}/entries/{entry_id}', response={200: dict, 401: dict, 404: dict}, tags=['Project Entries'])
@@ -236,7 +236,7 @@ def update_project_entry(request, project_url: str, entry_id: int, update_data: 
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
     if not project.contributor_is_admin(request.user):
         return 401, {'detail': f'Contributor is not project adminstrator'}
     try:
@@ -251,7 +251,7 @@ def update_project(request, project_url: str, update_data: ProjectPatchSchema):
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
     if not project.contributor_is_admin(request.user):
         return 401, {'detail': f'Contributor is not project adminstrator'}
     if update_data.name is not None:
@@ -276,7 +276,7 @@ def get_project_statistics(request, project_url: str):
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
     return {
         'total_entries': project.entries.count(),
         'total_imported_texts': project.imported_texts.count(),
@@ -291,7 +291,7 @@ def import_unannotated(request, project_url: str, text_field: str, csv_delimiter
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
 
     if csv_delimiter == r'\t':
         csv_delimiter = '\t'
@@ -335,7 +335,7 @@ def get_imported_entries(request, project_url: str):
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
     return 200, [{
         **model_to_dict(entry),
         'project': project.name,
@@ -352,7 +352,7 @@ def get_unannotated_entries(request, project_url: str):
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
     return 200, [{
         **model_to_dict(entry),
         'project': project.name,
@@ -369,7 +369,7 @@ def delete_unannotated_project_entry(request, project_url: str, entry_id: int):
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
     if not project.contributor_is_admin(request.user):
         return 401, {'detail': f'Contributor is not project adminstrator'}
     try:
@@ -377,7 +377,7 @@ def delete_unannotated_project_entry(request, project_url: str, entry_id: int):
     except UnannotatedProjectEntry.DoesNotExist:
         return 404, {'detail': f'Unannotated entry with ID: {entry_id} not found'}
     entry.delete()
-    return 200, {'detail', f'Successfully deleted unannotated entry {entry_id}'}
+    return 200, {'detail': f'Successfully deleted unannotated entry {entry_id}'}
 
 
 @router.get('/projects/{project_url}/export-disagreements')
@@ -385,26 +385,24 @@ def export_annotator_disagreements(request, project_url: str, annotator1: str, a
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
 
     try:
         annotator1_user = PrivateAnnotator.objects.get(
             project=project, contributor__username=annotator1)
     except PrivateAnnotator.DoesNotExist:
-        return 404, {'detail', f'Private Annotator with username {annotator1} does not exist'}
+        return 404, {'detail': f'Private Annotator with username {annotator1} does not exist'}
 
     try:
         annotator2_user = PrivateAnnotator.objects.get(
             project=project, contributor__username=annotator2)
     except PrivateAnnotator.DoesNotExist:
-        return 404, {'detail', f'Private Annotator with username {annotator2} does not exist'}
+        return 404, {'detail': f'Private Annotator with username {annotator2} does not exist'}
 
     annotator1_entries = project.get_annotators_annotations(annotator1_user)
-    print('annotator 1 entries done')
     annotator1_entries_source_id = [
         entry.unannotated_source.id for entry in annotator1_entries
     ]
-    print('annotator 1 ids done')
 
     annotator2_entries = project.get_annotators_annotations(annotator2_user)
     annotator2_entries_source_id = [
@@ -444,7 +442,7 @@ def export_project(request, project_url: str, export_type: str):
     try:
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
-        return 404, {'detail', f'Project with url {project_url} does not exist'}
+        return 404, {'detail': f'Project with url {project_url} does not exist'}
 
     if export_type == 'csv':
         # https://docs.djangoproject.com/en/4.1/howto/outputting-csv/

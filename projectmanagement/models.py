@@ -144,6 +144,36 @@ class TextHighlight(PolymorphicModel):
     )
 
 
+class NERTextHighlight(PolymorphicModel):
+    span_start = models.IntegerField(verbose_name='Beginning of text span')
+    span_end = models.IntegerField(verbose_name='End of text span')
+    category = models.ForeignKey('Category', on_delete=models.DO_NOTHING)
+
+
+class NamedEntityRecognitionProjectEntry(ProjectEntry):
+    ner_text_highlights = models.ManyToManyField(
+        NERTextHighlight, blank=True, verbose_name='Named Entity Recognition Text Highlights'
+    )
+
+    @property
+    def values(self):
+        return {
+            'ner_text_highlights': [
+                (highlight.span_start, highlight.span_end, highlight.category.name)
+                for highlight in self.ner_text_highlights.all()
+            ]
+        }
+
+    @property
+    def non_standard_fix(self):
+        return {
+            'ner_text_highlights': [
+                (highlight.span_start, highlight.span_end, highlight.category.name)
+                for highlight in self.ner_text_highlights.all()
+            ],
+        }
+
+
 class TextClassificationProjectEntry(ProjectEntry):
     classification = models.ForeignKey(
         'Category', on_delete=models.DO_NOTHING,
@@ -321,6 +351,119 @@ class TextClassificationProject(Project):
             TextClassificationProjectUnannotatedEntry.objects.create(
                 project=self, text=entry[text_field],
                 context=context, pre_annotation=pre_annotation
+            )
+
+        return 200, {'detail': f'Succesfully created {len(unannotated_data)} unannotated entries'}
+
+    def get_statistics(self):
+        return {
+            'categories': [
+                {
+                    'name': category.name,
+                    'total_entries': self.entries.filter(classification=category).count()
+                }
+                for category in self.categories
+            ]
+        }
+
+
+class NamedEntityRecognitionProject(Project):
+    @property
+    def project_type(self):
+        return 'Named Entity Recognition'
+
+    @property
+    def categories(self):
+        return Category.objects.filter(project=self)
+
+    @property
+    def value_fields(self):
+        return ['ner_text_highlights']
+
+    def add_entry(self, annotator, entry_data):
+        if entry_data.payload.get('ner_text_highlights', None) is None:
+            return 400, {'details': f'Missing ner_text_highlights data in request'}
+        try:
+            unannotated_source = UnannotatedProjectEntry.objects.get(
+                id=entry_data.unannotated_source, project=self
+            )
+        except UnannotatedProjectEntry.DoesNotExist:
+            return 404, {
+                'detail': f'''
+                    Unannotated source with ID: {entry_data.unannotated_source} 
+                    does not exist in project {self.name}
+                '''
+            }
+        new_entry_dict = {
+            'project': self,
+            'unannotated_source': unannotated_source,
+            'annotator': annotator
+        }
+
+        # Data integrity check
+        if entry_data.payload.get('ner_text_highlights', None) is not None:
+            for highlight in entry_data.payload.get('ner_text_highlights'):
+                beginning = highlight.get('beginning', None)
+                end = highlight.get('end', None)
+                category = highlight.get('category', None)
+                if None in [beginning, end, category]:
+                    return 400, {'detail': 'Missing data'}
+                try:
+                    Category.objects.get(project=self, name=category)
+                except Category.DoesNotExist:
+                    return 404, {'detail': f'Category {category} not found in project {self.name}'}
+
+        new_entry = NamedEntityRecognitionProjectEntry.objects.create(
+            **new_entry_dict)
+
+        if entry_data.payload.get('ner_text_highlights', None) is not None:
+            for highlight in entry_data.payload.get('ner_text_highlights'):
+                beginning = highlight.get('beginning')
+                end = highlight.get('end')
+                category = highlight.get('category')
+                category = Category.objects.get(project=self, name=category)
+                highlight = NERTextHighlight.objects.create(
+                    span_start=beginning, span_end=end, category=category
+                )
+                new_entry.ner_text_highlights.add(highlight)
+
+        return {
+            **model_to_dict(new_entry),
+            'project': self.name,
+            'project_type': self.project_type,
+            'project_url': str(self.url),
+            'unannotated_source': model_to_dict(new_entry.unannotated_source),
+            'value_fields': self.value_fields,
+            'pre_annotations': new_entry.unannotated_source.pre_annotations,
+            'created_at': new_entry.created_at.isoformat(),
+            'updated_at': new_entry.updated_at.isoformat(),
+            'context': new_entry.unannotated_source.context if new_entry.unannotated_source.context is not None else 'No context',
+            'ner_text_highlights': [
+                (highlight.span_start, highlight.span_end, highlight.category.name)
+                for highlight in new_entry.ner_text_highlights.all()
+            ]
+        }
+
+    def add_unannotated_entries(self, unannotated_data, text_field, value_field, context_field):
+        # start by running data integrity checks
+        # on the uploaded data to ensure that
+        # if preannotations are present, all categories
+        # exist and that data is well formated
+        for index, entry in enumerate(unannotated_data):
+            if type(entry) != dict:
+                return 400, {'detail': f'Uploaded data is not in a list of dictionaries format'}
+            if context_field is not None and context_field not in entry:
+                return 400, {'detail': f'Context field provided, but row with index {index} is missing context value'}
+            if text_field not in entry:
+                return 400, {'detail': f'Text field missing from row with index {index}'}
+
+        # data has been checked for integrity violations
+        # and now can be added to the database
+        for entry in unannotated_data:
+            context = entry.get(context_field, None)
+            NamedEntityRecognitionProjectUnannotatedEntry.objects.create(
+                project=self, text=entry[text_field],
+                context=context
             )
 
         return 200, {'detail': f'Succesfully created {len(unannotated_data)} unannotated entries'}
@@ -536,7 +679,9 @@ class Category(models.Model):
     # It is more convinient for contributors to annotate
     # when the category is associated with a keybinding,
     # which is saved as a string and processed on frontend
-    key_binding = models.CharField(max_length=255, verbose_name='Key Bindnig')
+    # NULL only when the project is NER
+    key_binding = models.CharField(
+        max_length=255, null=True, verbose_name='Key Bindnig')
     created_at = models.DateTimeField(
         auto_now_add=True, verbose_name='Category Created at'
     )
@@ -563,6 +708,16 @@ class TextClassificationProjectUnannotatedEntry(UnannotatedProjectEntry):
                          if self.pre_annotation is not None
                          else 'No preannotation')
         }
+
+    @property
+    def parameters(self):
+        return {'text': self.text}
+
+
+class NamedEntityRecognitionProjectUnannotatedEntry(UnannotatedProjectEntry):
+    @property
+    def pre_annotations(self):
+        return {}
 
     @property
     def parameters(self):

@@ -49,7 +49,7 @@ class EntrySchema(Schema):
 class CategoryInSchema(Schema):
     name: str
     description: str
-    key_binding: str
+    key_binding: Optional[str]
 
 
 class ProjectAdministratorInSchema(Schema):

@@ -8,7 +8,7 @@ from django.forms.models import model_to_dict
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from annotators.models import PrivateAnnotator, PublicAnnotator
-from projectmanagement.models import Category, MachineTranslationAdequacyProject, MachineTranslationFluencyProject, Project, ProjectEntry, TextClassificationProject, UnannotatedProjectEntry
+from projectmanagement.models import Category, MachineTranslationAdequacyProject, MachineTranslationFluencyProject, NamedEntityRecognitionProject, Project, ProjectEntry, TextClassificationProject, UnannotatedProjectEntry
 
 from projectmanagement.schemas import CategoryInSchema, CreateProjectSchema, EntrySchema, ProjectAdministratorInSchema, ProjectEntryPatchSchema, ProjectPatchSchema, ProjectSchema, TextClassificationOutSchema as TCOutSchema, MachineTranslationOutSchema as MTOutSchema
 
@@ -27,6 +27,10 @@ def create_project(request, project_data: CreateProjectSchema):
         )
     elif project_data.project_type in ['Machine Translation Fluency', 'machinetranslationfluency', 'machine-translation-fluency', 'MachineTranslationFluency', 'mtf', 'MTF']:
         project = MachineTranslationFluencyProject.objects.create(
+            name=project_data.name, description=project_data.description, talk_markdown=project_data.talk_markdown
+        )
+    elif project_data.project_type in ['Named Entity Recognition', 'namedentityrecognition', 'named-entity-recognition', 'NamedEntityRecognition', 'ner', 'NER']:
+        project = NamedEntityRecognitionProject.objects.create(
             name=project_data.name, description=project_data.description, talk_markdown=project_data.talk_markdown
         )
     else:
@@ -88,7 +92,7 @@ def get_project(request, project_url: str):
         'updated_at': project.updated_at.isoformat(),
         'administrators': [{'username': admin.username, 'email': admin.email} for admin in project.administrators.all()]
     }
-    if project.project_type in ['Text Classification']:
+    if project.project_type in ['Text Classification', 'Named Entity Recognition']:
         return_dict['categories'] = [
             {
                 **model_to_dict(category),
@@ -123,14 +127,20 @@ def create_classification_category(request, project_url: str, category_data: Cat
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
         return 404, {'detail': f'Project with url {project_url} does not exist'}
-    if project.project_type not in ['Text Classification']:
+    if project.project_type not in ['Text Classification', 'Named Entity Recognition']:
         return 404, {'detail': 'Project does not have a category type'}
     try:
-        category = Category.objects.create(
-            project=project, name=category_data.name,
-            description=category_data.description,
-            key_binding=category_data.key_binding
-        )
+        if project.project_type == 'Named Entity Recognition':
+            category = Category.objects.create(
+                project=project, name=category_data.name,
+                description=category_data.description
+            )
+        else:
+            category = Category.objects.create(
+                project=project, name=category_data.name,
+                description=category_data.description,
+                key_binding=category_data.key_binding
+            )
     except Exception as e:
         return 400, {'detail': f'Error: {e}'}
     return {
@@ -145,7 +155,7 @@ def delete_classification_category(request, project_url: str, category_id: int):
         project = Project.objects.get(url=project_url)
     except (Project.DoesNotExist, ValidationError):
         return 404, {'detail': f'Project with url {project_url} does not exist'}
-    if project.project_type not in ['Text Classification']:
+    if project.project_type not in ['Text Classification', 'Named Entity Recognition']:
         return 404, {'detail': 'Project does not have a category type'}
 
     # if not project.contributor_is_admin(request.user):
@@ -199,7 +209,7 @@ def get_project_entries(request, project_url: str):
         'annotator': entry.annotator.contributor.username
     } for entry in project.entries]
 
-    if project.project_type in ['Machine Translation Fluency', 'Machine Translation Adequacy']:
+    if project.project_type in ['Machine Translation Fluency']:
         for return_entry, entry in zip(return_list, project.entries):
             return_entry['target_text_highlights'] = [
                 (highlight.span_start, highlight.span_end, highlight.category)
@@ -211,7 +221,12 @@ def get_project_entries(request, project_url: str):
                     (highlight.span_start, highlight.span_end, highlight.category)
                     for highlight in entry.source_text_highlights.all()
                 ]
-
+    if project.project_type in ['Named Entity Recognition']:
+        for return_entry, entry in zip(return_list, project.entries):
+            return_entry['ner_text_highlights'] = [
+                (highlight.span_start, highlight.span_end, highlight.category.name)
+                for highlight in entry.ner_text_highlights.all()
+            ]
     return 200, return_list
 
 

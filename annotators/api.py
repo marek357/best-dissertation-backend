@@ -217,7 +217,7 @@ def get_categories_private_annotator(request, token: str):
     except (PrivateAnnotator.DoesNotExist, ValidationError):
         return 404, {'detail': f'Annotator with token {token} does not exist'}
     project = annotator.project
-    if project.project_type not in ['Text Classification']:
+    if project.project_type not in ['Text Classification', 'Named Entity Recognition']:
         return 404, {'detail': 'Project does not have a category type'}
     return [
         {

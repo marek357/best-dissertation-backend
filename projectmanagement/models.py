@@ -217,13 +217,21 @@ class MachineTranslationAdequacyProjectEntry(ProjectEntry):
 
     @property
     def non_standard_fix(self):
+        text_source = self.unannotated_source.text
+        text_target = self.unannotated_source.mt_system_translation
         return {
             'source_text_highlights': [
-                (highlight.span_start, highlight.span_end, highlight.category)
+                (
+                    f'{text_source[:highlight.span_start]}<s>{text_source[highlight.span_start:highlight.span_end+1]}</s>{text_source[highlight.span_end+1:]}',
+                    highlight.span_start, highlight.span_end, highlight.category
+                )
                 for highlight in self.source_text_highlights.all()
             ],
             'target_text_highlights': [
-                (highlight.span_start, highlight.span_end, highlight.category)
+                (
+                    f'{text_target[:highlight.span_start]}<s>{text_target[highlight.span_start:highlight.span_end+1]}</s>{text_target[highlight.span_end+1:]}',
+                    highlight.span_start, highlight.span_end, highlight.category
+                )
                 for highlight in self.target_text_highlights.all()
             ],
         }

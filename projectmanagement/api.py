@@ -216,11 +216,22 @@ def get_project_entries(request, project_url: str):
                 for highlight in entry.target_text_highlights.all()
             ]
 
-            if project.machine_translation_variation == 'adequacy':
-                return_entry['source_text_highlights'] = [
-                    (highlight.span_start, highlight.span_end, highlight.category)
-                    for highlight in entry.source_text_highlights.all()
-                ]
+            return_entry['source_text_highlights'] = [
+                (highlight.span_start, highlight.span_end, highlight.category)
+                for highlight in entry.source_text_highlights.all()
+            ]
+    if project.project_type in ['Machine Translation Adequacy']:
+        for return_entry, entry in zip(return_list, project.entries):
+            return_entry['target_text_highlights'] = [
+                (highlight.span_start, highlight.span_end, highlight.category)
+                for highlight in entry.target_text_highlights.all()
+            ]
+
+            return_entry['source_text_highlights'] = [
+                (highlight.span_start, highlight.span_end, highlight.category)
+                for highlight in entry.source_text_highlights.all()
+            ]
+
     if project.project_type in ['Named Entity Recognition']:
         for return_entry, entry in zip(return_list, project.entries):
             return_entry['ner_text_highlights'] = [
@@ -513,6 +524,7 @@ def export_project(request, project_url: str, export_type: str):
                 **entry.values, **preannotations,
                 'created_at': entry.created_at.isoformat(),
                 'updated_at': entry.updated_at.isoformat(),
+                **entry.non_standard_fix
             })
         response.write(json.dumps(export_data))
     else:

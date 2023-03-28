@@ -107,6 +107,9 @@ class ProjectEntry(PolymorphicModel):
 
     @property
     def non_standard_fix(self):
+        # if a project entry contains a field that
+        # is not JSON serialisable, it needs to be
+        # serialised by overriding this property
         return {}
 
     def update_with_data(self, update_data):

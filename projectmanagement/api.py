@@ -216,10 +216,6 @@ def get_project_entries(request, project_url: str):
                 for highlight in entry.target_text_highlights.all()
             ]
 
-            return_entry['source_text_highlights'] = [
-                (highlight.span_start, highlight.span_end, highlight.category)
-                for highlight in entry.source_text_highlights.all()
-            ]
     if project.project_type in ['Machine Translation Adequacy']:
         for return_entry, entry in zip(return_list, project.entries):
             return_entry['target_text_highlights'] = [

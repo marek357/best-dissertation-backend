@@ -1,4 +1,5 @@
 import csv
+from io import StringIO
 import json
 from django.http import HttpResponse
 import pandas as pd
@@ -323,14 +324,16 @@ def import_unannotated(request, project_url: str, text_field: str, csv_delimiter
             unannotated_data_file.file.read().decode('utf-8')
         )
     elif unannotated_data_file.content_type == 'text/csv':
+        # https://sparkbyexamples.com/pandas/how-to-read-csv-from-string-in-pandas/
         unannotated_data_df = pd.read_csv(
-            unannotated_data_file.file.read().decode('utf-8'),
+            StringIO(unannotated_data_file.file.read().decode('utf-8')),
             delimiter=csv_delimiter
         )
-        unannotated_data = unannotated_data_df.to_json(orient='records')
+        unannotated_data = json.loads(
+            unannotated_data_df.to_json(orient='records')
+        )
     else:
         return 400, {'detail': f'Uploaded data type {unannotated_data_file.content_type} is not supported'}
-
     if type(unannotated_data) != list:
         return 400, {'detail': f'Uploaded data is not in a list of records format'}
 

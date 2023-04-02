@@ -23,16 +23,25 @@ def create_project(request, project_data: CreateProjectSchema):
             name=project_data.name, description=project_data.description, talk_markdown=project_data.talk_markdown
         )
     elif project_data.project_type in ['Machine Translation Adequacy', 'machinetranslationadequacy', 'machine-translation-adequacy', 'MachineTranslationAdequacy', 'mta', 'MTA']:
+        if project_data.character_level_selection is None:
+            return 400, {'detail': f'Missing request data (character level selection)'}
         project = MachineTranslationAdequacyProject.objects.create(
-            name=project_data.name, description=project_data.description, talk_markdown=project_data.talk_markdown
+            name=project_data.name, description=project_data.description, talk_markdown=project_data.talk_markdown,
+            character_level_selection=project_data.character_level_selection
         )
     elif project_data.project_type in ['Machine Translation Fluency', 'machinetranslationfluency', 'machine-translation-fluency', 'MachineTranslationFluency', 'mtf', 'MTF']:
+        if project_data.character_level_selection is None:
+            return 400, {'detail': f'Missing request data (character level selection)'}
         project = MachineTranslationFluencyProject.objects.create(
-            name=project_data.name, description=project_data.description, talk_markdown=project_data.talk_markdown
+            name=project_data.name, description=project_data.description, talk_markdown=project_data.talk_markdown,
+            character_level_selection=project_data.character_level_selection
         )
     elif project_data.project_type in ['Named Entity Recognition', 'namedentityrecognition', 'named-entity-recognition', 'NamedEntityRecognition', 'ner', 'NER']:
+        if project_data.character_level_selection is None:
+            return 400, {'detail': f'Missing request data (character level selection)'}
         project = NamedEntityRecognitionProject.objects.create(
-            name=project_data.name, description=project_data.description, talk_markdown=project_data.talk_markdown
+            name=project_data.name, description=project_data.description, talk_markdown=project_data.talk_markdown,
+            character_level_selection=project_data.character_level_selection
         )
     else:
         return 404, {'detail': f'Project type {project_data.project_type} is not supported'}

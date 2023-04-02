@@ -30,6 +30,9 @@ class Project(PolymorphicModel):
     updated_at = models.DateTimeField(
         auto_now=True, verbose_name='Project Created at'
     )
+    character_level_selection = models.BooleanField(
+        null=True, verbose_name='Character or Word level selection'
+    )
 
     @property
     def imported_texts(self):
@@ -140,6 +143,8 @@ class UnannotatedProjectEntry(PolymorphicModel):
 
 
 class TextHighlight(PolymorphicModel):
+    mistranslation_source = models.ForeignKey(
+        'TextHighlight', on_delete=models.CASCADE, null=True)
     span_start = models.IntegerField(verbose_name='Beginning of text span')
     span_end = models.IntegerField(verbose_name='End of text span')
     category = models.CharField(
@@ -305,7 +310,7 @@ class TextClassificationProject(Project):
         except UnannotatedProjectEntry.DoesNotExist:
             return 404, {
                 'detail': f'''
-                    Unannotated source with ID: {entry_data.unannotated_source} 
+                    Unannotated source with ID: {entry_data.unannotated_source}
                     does not exist in project {self.name}
                 '''
             }
@@ -341,7 +346,7 @@ class TextClassificationProject(Project):
                 except Category.DoesNotExist:
                     return 400, {
                         'detail': f'''
-                            Uploaded data contains category {entry[value_field]}, 
+                            Uploaded data contains category {entry[value_field]},
                             that does not exist in project {self.name}
                         '''
                     }
@@ -401,7 +406,7 @@ class NamedEntityRecognitionProject(Project):
         except UnannotatedProjectEntry.DoesNotExist:
             return 404, {
                 'detail': f'''
-                    Unannotated source with ID: {entry_data.unannotated_source} 
+                    Unannotated source with ID: {entry_data.unannotated_source}
                     does not exist in project {self.name}
                 '''
             }
@@ -518,7 +523,7 @@ class MachineTranslationProject(Project):
         except UnannotatedProjectEntry.DoesNotExist:
             return 404, {
                 'detail': f'''
-                    Unannotated source with ID: {entry_data.unannotated_source} 
+                    Unannotated source with ID: {entry_data.unannotated_source}
                     does not exist in project {self.name}
                 '''
             }
@@ -543,10 +548,23 @@ class MachineTranslationProject(Project):
                 beginning = highlight.get('beginning', None)
                 end = highlight.get('end', None)
                 category = highlight.get('category', None)
+                mistranslation_source = highlight.get(
+                    'mistranslation_source', None)
+                mistranslation_source_object = None
                 if None in [beginning, end, category]:
                     pass
+                if category == 'Mistranslation' and mistranslation_source is None:
+                    pass
+                if category == 'Mistranslation' and mistranslation_source is not None:
+                    mistranslation_source_object = TextHighlight.objects.create(
+                        span_start=mistranslation_source.get('start'),
+                        span_end=mistranslation_source.get('end'),
+                        category="mistranslation-reference"
+                    )
                 highlight = TextHighlight.objects.create(
-                    span_start=beginning, span_end=end, category=category)
+                    span_start=beginning, span_end=end, category=category,
+                    mistranslation_source=mistranslation_source_object
+                )
                 new_entry.target_text_highlights.add(highlight)
 
         if self.machine_translation_variation == 'adequacy':

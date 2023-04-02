@@ -87,6 +87,9 @@ def get_project_private_annotator(request, private_annotator_token: str):
         }
     print(private_annotator.contributor.username,
           private_annotator.project.name, private_annotator.project.project_type)
+    character_level_selection = private_annotator.project.project_type in [
+        'Machine Translation Fluency', 'Machine Translation Adequacy'
+    ] and private_annotator.project.character_level_selection
     return 200, {
         **model_to_dict(private_annotator),
         'project_type': private_annotator.project.project_type,
@@ -94,7 +97,8 @@ def get_project_private_annotator(request, private_annotator_token: str):
         'inviting_contributor': request.user.username,
         'contributor': private_annotator.contributor.username,
         'is_active': private_annotator.contributor.is_active,
-        'completion': private_annotator.completion
+        'completion': private_annotator.completion,
+        'character_level_annotation': character_level_selection
     }
 
 

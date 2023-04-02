@@ -7,6 +7,7 @@ class CreateProjectSchema(Schema):
     name: str
     description: str
     talk_markdown: str
+    character_level_selection: Optional[bool]
 
 
 class ProjectSchema(Schema):
@@ -19,6 +20,7 @@ class ProjectSchema(Schema):
     type: str
     talk_markdown: str
     url: str
+    character_level_selection: Optional[bool]
 
 
 class ProjectPatchSchema(Schema):

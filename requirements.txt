@@ -1,6 +1,7 @@
 asgiref==3.5.2
 autopep8==1.7.0
-backports.zoneinfo==0.2.1
+# https://stackoverflow.com/questions/71712258/error-could-not-build-wheels-for-backports-zoneinfo-which-is-required-to-insta
+backports.zoneinfo;python_version<"3.9"
 bleach==5.0.1
 CacheControl==0.12.11
 cachetools==5.2.0

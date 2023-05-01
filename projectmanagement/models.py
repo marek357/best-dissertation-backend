@@ -233,11 +233,19 @@ class MachineTranslationAdequacyProjectEntry(ProjectEntry):
                     f'{text_source[:highlight.span_start]}<s>{text_source[highlight.span_start:highlight.span_end+1]}</s>{text_source[highlight.span_end+1:]}',
                     highlight.span_start, highlight.span_end, highlight.category
                 )
-                for highlight in self.source_text_highlights.all()
+                # https://stackoverflow.com/questions/9003518/django-equivalent-of-sql-not-in
+                for highlight in self.source_text_highlights.exclude(category__in=['Mistranslation'])
             ],
             'target_text_highlights': [
                 (
                     f'{text_target[:highlight.span_start]}<s>{text_target[highlight.span_start:highlight.span_end+1]}</s>{text_target[highlight.span_end+1:]}',
+                    f'''
+                        {text_source[:highlight.mistranslation_source.span_start]}
+                        <s>{text_source[highlight.mistranslation_source.span_start:highlight.mistranslation_source.span_end+1]}</s>
+                        {text_source[highlight.mistranslation_source.span_end+1:]}
+                    '''
+                    if highlight.category == 'Mistranslation'
+                    else 'Not mistranslation annotation',
                     highlight.span_start, highlight.span_end, highlight.category
                 )
                 for highlight in self.target_text_highlights.all()

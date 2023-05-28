@@ -271,9 +271,13 @@ class MachineTranslationFluencyProjectEntry(ProjectEntry):
 
     @property
     def non_standard_fix(self):
+        text_target = self.unannotated_source.mt_system_translation
         return {
             'target_text_highlights': [
-                (highlight.span_start, highlight.span_end, highlight.category)
+                (
+                    f'{text_target[:highlight.span_start]}<s>{text_target[highlight.span_start:highlight.span_end+1]}</s>{text_target[highlight.span_end+1:]}',
+                    highlight.span_start, highlight.span_end, highlight.category
+                )
                 for highlight in self.target_text_highlights.all()
             ],
         }

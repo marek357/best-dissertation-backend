@@ -479,6 +479,60 @@ def export_project(request, project_url: str, export_type: str):
         return 404, {'detail': f'Project with url {project_url} does not exist'}
 
     if export_type == 'csv':
+        if project.project_type in ['Machine Translation Fluency', 'Machine Translation Adequacy']:
+            fields = [
+                'annotator_id', 'id', 'imported_text_source_id',
+                'created time', 'update time',
+                'src_lang', 'tgt_lang',
+                'src_text', 'ref_text', 'mt_text',
+                'assessment type', 'assessment score'
+                'issue type', 'issue src_text', 'issue tgt_text'
+            ]
+            src_lang = 'eng'
+            tgt_lang = ''
+
+            # https://stackoverflow.com/questions/1156246/having-django-serve-downloadable-files
+            response = HttpResponse(content_type='application/force-download', headers={
+                'Content-Disposition': f'attachment; filename="{project.name}.csv"'
+            })
+
+            writer = csv.writer(response)
+
+            # https://stackoverflow.com/questions/44879253/python-django-utf-8-csv-writer
+            response.write(u'\ufeff'.encode('utf8'))
+
+            # header row
+            writer.writerow(fields)
+
+            for entry in project.entries:
+                mt_text = entry.unannotated_source.mt_system_translation if project.project_type == 'Machine Translation Adequacy' else ''
+                score = entry.adequacy if project.project_type == 'Machine Translation Adequacy' else entry.fluency
+                base_field_values = [
+                    entry.annotator.id, entry.id, entry.unannotated_source.id,
+                    entry.created_at.isoformat(), entry.updated_at.isoformat(),
+                    src_lang, tgt_lang,
+                    entry.unannotated_source.text, '', mt_text,
+                    project.project_type, score
+                ]
+                highlights_data = entry.non_standard_fix
+                if project.project_type == 'Machine Translation Adequacy':
+                    for mistake in highlights_data['source_text_highlights']:
+                        writer.writerow(
+                            [*base_field_values, mistake[3], mistake[0], 'N/A'])
+                    for mistake in highlights_data['target_text_highlights']:
+                        if mistake[4] == 'Mistranslation':
+                            writer.writerow(
+                                [*base_field_values, mistake[4], mistake[1], mistake[0]])
+                        else:
+                            writer.writerow(
+                                [*base_field_values, mistake[4], 'N/A', mistake[0]])
+                else:
+                    for mistake in highlights_data['target_text_highlights']:
+                        writer.writerow(
+                            [*base_field_values, mistake[3], 'N/A', mistake[0]])
+
+            return response
+
         # https://docs.djangoproject.com/en/4.1/howto/outputting-csv/
         value_fields = sorted(project.value_fields)
         # https://stackoverflow.com/questions/1156246/having-django-serve-downloadable-files

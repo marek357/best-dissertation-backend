@@ -165,6 +165,8 @@ def create_private_annotators_entry(request, token: str, entry_data: PrivateAnno
     except PrivateAnnotator.DoesNotExist:
         return 404, {'detail': f'Annotator with token {token} not found'}
     project = annotator.project
+    if ProjectEntry.objects.filter(annotator=annotator, unannotated_source__id=entry_data.unannotated_source).exists():
+        return 400, {'detail': f'Annotator already annotated the text with id {entry_data.unannotated_source}'}
     return project.add_entry(annotator, entry_data)
 
 
@@ -245,6 +247,23 @@ def modify_annotators_entry(request, token: str, entry_id: int, patch_data: Priv
     except (PrivateAnnotator.DoesNotExist, ValidationError):
         return 404, {'detail': f'Entry with ID {entry_id}, created by {annotator.contributor.username} does not exist in project {project.name}'}
     return entry.update_with_data(patch_data)
+
+
+@router.delete('/projects/entry', response={200: dict, 401: dict, 404: dict}, tags=['Private Annotators'])
+def delete_annotators_entry(request, token: str, entry_id: int):
+    try:
+        annotator = PrivateAnnotator.objects.get(token=token)
+    except (PrivateAnnotator.DoesNotExist, ValidationError):
+        return 404, {'detail': f'Annotator with token {token} does not exist'}
+    project = annotator.project
+    try:
+        entry = ProjectEntry.objects.get(
+            id=entry_id, project=project, annotator=annotator
+        )
+    except (PrivateAnnotator.DoesNotExist, ValidationError):
+        return 404, {'detail': f'Entry with ID {entry_id}, created by {annotator.contributor.username} does not exist in project {project.name}'}
+    entry.delete()
+    return 200, {'detail': f'Successfully deleted entry {entry_id}'}
 
 
 @router.patch('/projects/', response={200: dict, 401: dict, 404: dict}, tags=['Private Annotators'])

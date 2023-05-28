@@ -41,7 +41,7 @@ def invite_annotator(request, project_url: str, private_annotator_data: CreatePr
         project=project, contributor=contributor, inviting_contributor=request.user, token=uuid4().hex
     )
     # if private_annotator_data.send_email:
-    #     send_annotator_welcome_email(annotator, request.user, project)
+    send_annotator_welcome_email(annotator, request.user, project)
     return 200, {
         **model_to_dict(annotator),
         'inviting_contributor': request.user.username,

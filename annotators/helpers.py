@@ -7,7 +7,7 @@ def send_annotator_welcome_email(annotator, inviting_contributor, project):
         Hi {annotator.contributor.username}!\n\n
         You have been invited by {inviting_contributor.username} to contribute
         to the project {project.name}!\n
-        Please click the link to annotate: https://annopedia.marekmasiak.tech/private-annotator/annotate?token={annotator.token}\n
+        Please click the link to annotate: https://mt.annopedia.marekmasiak.tech/private-annotator/annotate?token={annotator.token}\n
         Good luck!\n\n
         Best regards,\n
         Annopedia Team

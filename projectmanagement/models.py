@@ -505,6 +505,9 @@ class NamedEntityRecognitionProject(Project):
 
 
 class MachineTranslationProject(Project):
+    source_language = models.CharField(max_length=255, default='', null=True)
+    target_language = models.CharField(max_length=255, default='', null=True)
+
     @property
     def machine_translation_variation(self):
         raise NotImplementedError
@@ -765,6 +768,7 @@ class MachineTranslationAdequacyProjectUnannotatedEntry(UnannotatedProjectEntry)
     mt_system_translation = models.TextField(
         verbose_name='Reference Translation'
     )
+    reference_translation = models.TextField(null=True, default='')
 
     pre_annotation_adequacy = models.FloatField(
         null=True, blank=True,
@@ -792,6 +796,7 @@ class MachineTranslationFluencyProjectUnannotatedEntry(UnannotatedProjectEntry):
         null=True, blank=True,
         verbose_name='Pre-annotation fluency'
     )
+    reference_translation = models.TextField(null=True, default='')
 
     @property
     def pre_annotations(self):

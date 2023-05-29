@@ -485,11 +485,9 @@ def export_project(request, project_url: str, export_type: str):
                 'created time', 'update time',
                 'src_lang', 'tgt_lang',
                 'src_text', 'ref_text', 'mt_text',
-                'assessment type', 'assessment score'
+                'assessment type', 'assessment score',
                 'issue type', 'issue src_text', 'issue tgt_text'
             ]
-            src_lang = 'eng'
-            tgt_lang = ''
 
             # https://stackoverflow.com/questions/1156246/having-django-serve-downloadable-files
             response = HttpResponse(content_type='application/force-download', headers={
@@ -510,7 +508,7 @@ def export_project(request, project_url: str, export_type: str):
                 base_field_values = [
                     entry.annotator.id, entry.id, entry.unannotated_source.id,
                     entry.created_at.isoformat(), entry.updated_at.isoformat(),
-                    src_lang, tgt_lang,
+                    project.source_language, project.target_language,
                     entry.unannotated_source.text, '', mt_text,
                     project.project_type, score
                 ]

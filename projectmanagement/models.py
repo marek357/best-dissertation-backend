@@ -271,7 +271,7 @@ class MachineTranslationFluencyProjectEntry(ProjectEntry):
 
     @property
     def non_standard_fix(self):
-        text_target = self.unannotated_source.mt_system_translation
+        text_target = self.unannotated_source.text
         return {
             'target_text_highlights': [
                 (

@@ -524,10 +524,16 @@ def export_project(request, project_url: str, export_type: str):
                         else:
                             writer.writerow(
                                 [*base_field_values, mistake[4], 'N/A', mistake[0]])
+                    if len(highlights_data['source_text_highlights']) + len(highlights_data['target_text_highlights']) == 0:
+                        writer.writerow(
+                            [*base_field_values, 'N/A', 'N/A', 'N/A'])
                 else:
                     for mistake in highlights_data['target_text_highlights']:
                         writer.writerow(
                             [*base_field_values, mistake[3], 'N/A', mistake[0]])
+                    if len(highlights_data['target_text_highlights']) == 0:
+                        writer.writerow(
+                            [*base_field_values, 'N/A', 'N/A', 'N/A'])
 
             return response
 

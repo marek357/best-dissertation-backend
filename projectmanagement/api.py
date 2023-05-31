@@ -481,7 +481,7 @@ def export_project(request, project_url: str, export_type: str):
     if export_type == 'csv':
         if project.project_type in ['Machine Translation Fluency', 'Machine Translation Adequacy']:
             fields = [
-                'annotator_id', 'id', 'imported_text_source_id',
+                'annotator_id', 'annotator_email', 'id', 'imported_text_source_id',
                 'created time', 'update time',
                 'src_lang', 'tgt_lang',
                 'src_text', 'ref_text', 'mt_text',
@@ -506,7 +506,7 @@ def export_project(request, project_url: str, export_type: str):
                 mt_text = entry.unannotated_source.mt_system_translation if project.project_type == 'Machine Translation Adequacy' else ''
                 score = entry.adequacy if project.project_type == 'Machine Translation Adequacy' else entry.fluency
                 base_field_values = [
-                    entry.annotator.id, entry.id, entry.unannotated_source.id,
+                    entry.annotator.id, entry.annotator.contributor.email, entry.id, entry.unannotated_source.id,
                     entry.created_at.isoformat(), entry.updated_at.isoformat(),
                     project.source_language, project.target_language,
                     entry.unannotated_source.text, '', mt_text,

@@ -480,14 +480,24 @@ def export_project(request, project_url: str, export_type: str):
 
     if export_type == 'csv':
         if project.project_type in ['Machine Translation Fluency', 'Machine Translation Adequacy']:
-            fields = [
-                'annotator_id', 'annotator_email', 'id', 'imported_text_source_id',
-                'created time', 'update time',
-                'src_lang', 'tgt_lang',
-                'src_text', 'ref_text', 'mt_text',
-                'assessment type', 'assessment score',
-                'issue type', 'issue src_text', 'issue tgt_text'
-            ]
+            if project.contributor_is_admin(request.user):
+                fields = [
+                    'annotator_id', 'annotator_email', 'id', 'imported_text_source_id',
+                    'created time', 'update time',
+                    'src_lang', 'tgt_lang',
+                    'src_text', 'ref_text', 'mt_text',
+                    'assessment type', 'assessment score',
+                    'issue type', 'issue src_text', 'issue tgt_text'
+                ]
+            else:
+                fields = [
+                    'annotator_id', 'id', 'imported_text_source_id',
+                    'created time', 'update time',
+                    'src_lang', 'tgt_lang',
+                    'src_text', 'ref_text', 'mt_text',
+                    'assessment type', 'assessment score',
+                    'issue type', 'issue src_text', 'issue tgt_text'
+                ]
 
             # https://stackoverflow.com/questions/1156246/having-django-serve-downloadable-files
             response = HttpResponse(content_type='application/force-download', headers={
@@ -505,13 +515,22 @@ def export_project(request, project_url: str, export_type: str):
             for entry in project.entries:
                 mt_text = entry.unannotated_source.mt_system_translation if project.project_type == 'Machine Translation Adequacy' else ''
                 score = entry.adequacy if project.project_type == 'Machine Translation Adequacy' else entry.fluency
-                base_field_values = [
-                    entry.annotator.id, entry.annotator.contributor.email, entry.id, entry.unannotated_source.id,
-                    entry.created_at.isoformat(), entry.updated_at.isoformat(),
-                    project.source_language, project.target_language,
-                    entry.unannotated_source.text, '', mt_text,
-                    project.project_type, score
-                ]
+                if project.contributor_is_admin(request.user):
+                    base_field_values = [
+                        entry.annotator.id, entry.annotator.contributor.email, entry.id, entry.unannotated_source.id,
+                        entry.created_at.isoformat(), entry.updated_at.isoformat(),
+                        project.source_language, project.target_language,
+                        entry.unannotated_source.text, '', mt_text,
+                        project.project_type, score
+                    ]
+                else:
+                    base_field_values = [
+                        entry.annotator.id, entry.id, entry.unannotated_source.id,
+                        entry.created_at.isoformat(), entry.updated_at.isoformat(),
+                        project.source_language, project.target_language,
+                        entry.unannotated_source.text, '', mt_text,
+                        project.project_type, score
+                    ]
                 highlights_data = entry.non_standard_fix
                 if project.project_type == 'Machine Translation Adequacy':
                     for mistake in highlights_data['source_text_highlights']:

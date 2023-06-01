@@ -239,9 +239,7 @@ class MachineTranslationAdequacyProjectEntry(ProjectEntry):
             'target_text_highlights': [
                 (
                     f'{text_target[:highlight.span_start]}<s>{text_target[highlight.span_start:highlight.span_end+1]}</s>{text_target[highlight.span_end+1:]}',
-                    f'''{text_source[:highlight.mistranslation_source.span_start]}<s>{text_source[highlight.mistranslation_source.span_start:highlight.mistranslation_source.span_end+1]}</s>{text_source[highlight.mistranslation_source.span_end+1:]}'''
-                    if highlight.category == 'Mistranslation'
-                    else 'Not mistranslation annotation',
+                    'Not mistranslation annotation' if highlight.category != 'Mistranslation' else f'''{text_source[:highlight.mistranslation_source.span_start]}<s>{text_source[highlight.mistranslation_source.span_start:highlight.mistranslation_source.span_end+1]}</s>{text_source[highlight.mistranslation_source.span_end+1:]}''',
                     highlight.span_start, highlight.span_end, highlight.category
                 )
                 for highlight in self.target_text_highlights.all()

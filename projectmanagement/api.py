@@ -482,7 +482,7 @@ def export_project(request, project_url: str, export_type: str):
         if project.project_type in ['Machine Translation Fluency', 'Machine Translation Adequacy']:
             if project.contributor_is_admin(request.user):
                 fields = [
-                    'annotator_id', 'annotator_email', 'id', 'imported_text_source_id',
+                    'annotator_id', 'annotator_email', 'id', 'annotator_comment', 'imported_text_source_id',
                     'created time', 'update time',
                     'src_lang', 'tgt_lang',
                     'src_text', 'ref_text', 'mt_text',
@@ -517,7 +517,7 @@ def export_project(request, project_url: str, export_type: str):
                 score = entry.adequacy if project.project_type == 'Machine Translation Adequacy' else entry.fluency
                 if project.contributor_is_admin(request.user):
                     base_field_values = [
-                        entry.annotator.id, entry.annotator.contributor.email, entry.id, entry.unannotated_source.id,
+                        entry.annotator.id, entry.annotator.contributor.email, entry.id, entry.annotator_comment, entry.unannotated_source.id,
                         entry.created_at.isoformat(), entry.updated_at.isoformat(),
                         project.source_language, project.target_language,
                         entry.unannotated_source.text, '', mt_text,
